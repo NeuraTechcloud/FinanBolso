@@ -7,7 +7,9 @@ import {
   ArrowUpDown, 
   Calendar, 
   X, 
-  Plus 
+  Plus,
+  Lock,
+  Crown
 } from 'lucide-react';
 import { Transaction, Category, PAYMENT_METHOD_LABELS, PaymentMethod } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
@@ -18,6 +20,8 @@ interface TransactionsTabProps {
   selectedMonth: string;
   onSelectTransaction: (tx: Transaction) => void;
   onOpenAddModal: () => void;
+  isPro?: boolean;
+  onOpenSubscription?: () => void;
 }
 
 export const TransactionsTab: React.FC<TransactionsTabProps> = ({
@@ -26,6 +30,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   selectedMonth,
   onSelectTransaction,
   onOpenAddModal,
+  isPro = false,
+  onOpenSubscription,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income'>('all');
@@ -33,6 +39,33 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   const [methodFilter, setMethodFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
   const [showFilters, setShowFilters] = useState(false);
+
+  // If not Pro, show locked screen
+  if (!isPro) {
+    return (
+      <div className="p-6 text-center bg-slate-900 border border-amber-500/30 rounded-3xl space-y-4 shadow-xl animate-in fade-in my-4">
+        <div className="w-16 h-16 rounded-3xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
+          <Lock className="w-8 h-8" />
+        </div>
+        <div>
+          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 inline-flex items-center gap-1">
+            <Crown className="w-3 h-3 text-amber-400" /> RECURSO PRO EXCLUSIVO
+          </span>
+          <h3 className="text-base font-extrabold text-white mt-2">Extrato Financeiro Completo</h3>
+          <p className="text-xs text-slate-300 max-w-sm mx-auto leading-relaxed mt-1">
+            A visualização consolidada, busca detalhada e filtros avançados do seu Extrato são exclusivos para membros do Clube Pro.
+          </p>
+        </div>
+        <button
+          onClick={onOpenSubscription}
+          className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-2xl shadow-xl transition active:scale-95 flex items-center justify-center gap-2 mx-auto"
+        >
+          <Crown className="w-4 h-4 text-slate-950" />
+          <span>Desbloquear Extrato com Clube Pro</span>
+        </button>
+      </div>
+    );
+  }
 
   // Month filter base
   const baseList = useMemo(() => {

@@ -10,21 +10,24 @@ import {
   Plus, 
   Wallet,
   Sparkles,
-  RotateCcw,
   CheckCircle2,
   Zap
 } from 'lucide-react';
 import { Transaction, Category, PAYMENT_METHOD_LABELS, DEFAULT_QUICK_PRESETS, QuickPreset } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
+import { AISmartAdvisor } from '../AISmartAdvisor';
+import { CashFlowProjection } from '../CashFlowProjection';
+import { DebtQuittancePlanner } from '../DebtQuittancePlanner';
 
 interface HomeTabProps {
   transactions: Transaction[];
   categories: Category[];
   selectedMonth: string;
+  isPro: boolean;
+  onOpenSubscription: () => void;
   onOpenAddModal: (prefillType?: 'expense' | 'income') => void;
   onSelectTransaction: (tx: Transaction) => void;
   onGoToTab: (tab: any) => void;
-  onLoadDemoData: () => void;
   onQuickAddPreset: (preset: QuickPreset) => void;
 }
 
@@ -32,10 +35,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   transactions,
   categories,
   selectedMonth,
+  isPro,
+  onOpenSubscription,
   onOpenAddModal,
   onSelectTransaction,
   onGoToTab,
-  onLoadDemoData,
   onQuickAddPreset,
 }) => {
   // Memoized month transactions
@@ -215,6 +219,27 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
       </div>
 
+      {/* Pro Features: AI Smart Advisor & Cash Flow Projections */}
+      <AISmartAdvisor
+        transactions={monthTransactions}
+        categories={categories}
+        isPro={isPro}
+        onOpenSubscription={onOpenSubscription}
+      />
+
+      <CashFlowProjection
+        transactions={transactions}
+        isPro={isPro}
+        onOpenSubscription={onOpenSubscription}
+      />
+
+      <DebtQuittancePlanner
+        transactions={transactions}
+        categories={categories}
+        isPro={isPro}
+        onOpenSubscription={onOpenSubscription}
+      />
+
       {/* Empty State / Welcome Guide (Clean data banner) */}
       {transactions.length === 0 && (
         <div className="bg-gradient-to-b from-slate-900 to-slate-950 border border-emerald-500/30 rounded-3xl p-5 text-center space-y-3 shadow-lg">
@@ -222,28 +247,19 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             <CheckCircle2 className="w-6 h-6 stroke-[2]" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white">Base Limpa & Pronta para Teste!</h3>
+            <h3 className="text-sm font-bold text-white">Ambiente Pronto para Uso Real</h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed mt-1">
-              Todos os dados fictícios foram removidos. Adicione seus lançamentos reais ou use o botão de demonstração para testar relatórios e gráficos.
+              Sua base de dados está limpa e dedicada exclusivamente aos seus registros financeiros reais. Adicione suas receitas e despesas para iniciar o controle e planejamento.
             </p>
           </div>
 
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
+          <div className="pt-2 flex items-center justify-center">
             <button
               onClick={() => onOpenAddModal('expense')}
-              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md transition active:scale-95"
+              className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md transition active:scale-95"
             >
               <Plus className="w-4 h-4" />
               <span>Adicionar Meu Primeiro Gasto</span>
-            </button>
-
-            <button
-              onClick={onLoadDemoData}
-              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs flex items-center justify-center gap-1.5 border border-slate-700 transition"
-              title="Preenche o app com exemplos de teste"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-blue-400" />
-              <span>Carregar Dados de Demonstração</span>
             </button>
           </div>
         </div>

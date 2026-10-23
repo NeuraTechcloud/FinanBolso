@@ -115,13 +115,16 @@ export const ChartsTab: React.FC<ChartsTabProps> = ({
       const endAngle = accumulatedAngle + angle;
       accumulatedAngle += angle;
 
+      const safeAngle = angle >= 359.99 ? 359.99 : Math.max(0.01, angle);
+      const safeEndAngle = startAngle + safeAngle;
+
       const toRad = (deg: number) => (deg - 90) * (Math.PI / 180);
       const x1 = 100 + 70 * Math.cos(toRad(startAngle));
       const y1 = 100 + 70 * Math.sin(toRad(startAngle));
-      const x2 = 100 + 70 * Math.cos(toRad(endAngle));
-      const y2 = 100 + 70 * Math.sin(toRad(endAngle));
+      const x2 = 100 + 70 * Math.cos(toRad(safeEndAngle));
+      const y2 = 100 + 70 * Math.sin(toRad(safeEndAngle));
 
-      const largeArc = angle > 180 ? 1 : 0;
+      const largeArc = safeAngle > 180 ? 1 : 0;
       const pathData = `M 100 100 L ${x1} ${y1} A 70 70 0 ${largeArc} 1 ${x2} ${y2} Z`;
 
       return {

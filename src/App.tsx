@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { StorageService } from './services/storage';
-import { Transaction, Category, SavingsGoal, QuickPreset, TransactionType } from './types/finance';
+import { Transaction, Category, SavingsGoal, QuickPreset, TransactionType, Reminder } from './types/finance';
 import { Header } from './components/Header';
 import { BottomNav, TabType } from './components/BottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { TransactionModal } from './components/TransactionModal';
+import { SubscriptionModal } from './components/SubscriptionModal';
+import { ManagerPanelModal } from './components/ManagerPanelModal';
 import { HomeTab } from './components/tabs/HomeTab';
 import { ChartsTab } from './components/tabs/ChartsTab';
 import { TransactionsTab } from './components/tabs/TransactionsTab';
@@ -13,11 +15,16 @@ import { ExportTab } from './components/tabs/ExportTab';
 import { Wifi, Battery, Signal, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatBRL } from './services/exportService';
+import { TransactionEffectOverlay, EffectType } from './components/TransactionEffectOverlay';
 
 export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [subscription, setSubscription] = useState<{ isPro: boolean; planName: string; expiresAt: number }>(() => StorageService.getSubscription());
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -33,10 +40,27 @@ export default function App() {
   // Quick Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Distinct Effects State for Income vs Expense
+  const [activeEffect, setActiveEffect] = useState<{
+    type: EffectType;
+    amount: number;
+    description: string;
+  }>({ type: null, amount: 0, description: '' });
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
+
+  // Expose subscription and manager modal openers globally
+  useEffect(() => {
+    (window as any)._openSubscriptionModal = () => setIsSubscriptionModalOpen(true);
+    (window as any)._openManagerModal = () => setIsManagerModalOpen(true);
+    return () => {
+      delete (window as any)._openSubscriptionModal;
+      delete (window as any)._openManagerModal;
+    };
+  }, []);
 
   // Load from local offline storage on mount
   useEffect(() => {
@@ -47,9 +71,11 @@ export default function App() {
     const loadedTx = StorageService.getTransactions();
     const loadedCats = StorageService.getCategories();
     const loadedGoals = StorageService.getSavingsGoals();
+    const loadedRem = StorageService.getReminders();
     setTransactions(loadedTx);
     setCategories(loadedCats);
     setSavingsGoals(loadedGoals);
+    setReminders(loadedRem);
   };
 
   // Save/Update transaction
@@ -72,6 +98,11 @@ export default function App() {
         createdAt: Date.now(),
       };
       updated = [newTx, ...transactions];
+      setActiveEffect({
+        type: txData.type,
+        amount: txData.amount,
+        description: txData.description,
+      });
       showToast(`${txData.type === 'income' ? 'Receita' : 'Despesa'} de ${formatBRL(txData.amount)} salva!`);
     }
     setTransactions(updated);
@@ -96,17 +127,15 @@ export default function App() {
     const updated = [newTx, ...transactions];
     setTransactions(updated);
     StorageService.saveTransactions(updated);
+    setActiveEffect({
+      type: preset.type,
+      amount: newTx.amount,
+      description: preset.title,
+    });
     showToast(`✓ ${preset.title} (${formatBRL(newTx.amount)}) lançado no celular!`);
   };
 
-  // Load Demo Data for rapid testing of charts & exports
-  const handleLoadDemoData = () => {
-    const { transactions: demoTx, categories: demoCat, goals: demoGoals } = StorageService.resetToDemoData();
-    setTransactions(demoTx);
-    setCategories(demoCat);
-    setSavingsGoals(demoGoals);
-    showToast('Dados de demonstração carregados para teste!');
-  };
+
 
   // Delete transaction
   const handleDeleteTransaction = (id: string) => {
@@ -127,6 +156,24 @@ export default function App() {
   const handleUpdateCategories = (newCategories: Category[]) => {
     setCategories(newCategories);
     StorageService.saveCategories(newCategories);
+  };
+
+  // Update Reminders
+  const handleUpdateReminders = (newReminders: Reminder[]) => {
+    setReminders(newReminders);
+    StorageService.saveReminders(newReminders);
+  };
+
+  // Activate Pro Subscription
+  const handleActivatePro = (planName: string) => {
+    const newSub = {
+      isPro: true,
+      planName,
+      expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 365,
+    };
+    setSubscription(newSub);
+    StorageService.saveSubscription(newSub);
+    showToast(`✓ Assinatura ${planName} ativada com sucesso!`);
   };
 
   // Open modal for editing
@@ -155,6 +202,14 @@ export default function App() {
           <span>{toastMessage}</span>
         </div>
       )}
+
+      {/* Distinct Visual/Audio Effect Overlay for Income vs Expense */}
+      <TransactionEffectOverlay
+        effectType={activeEffect.type}
+        amount={activeEffect.amount}
+        description={activeEffect.description}
+        onClear={() => setActiveEffect({ type: null, amount: 0, description: '' })}
+      />
 
       {/* Container: Smartphone frame or full width with strict viewport height for smooth scrolling */}
       <div 
@@ -187,6 +242,8 @@ export default function App() {
             onSelectMonth={setSelectedMonth}
             isPhoneFrame={isPhoneFrame}
             onTogglePhoneFrame={() => setIsPhoneFrame(!isPhoneFrame)}
+            isPro={subscription.isPro}
+            expiresAt={subscription.expiresAt}
           />
         </div>
 
@@ -209,10 +266,11 @@ export default function App() {
                   transactions={transactions}
                   categories={categories}
                   selectedMonth={selectedMonth}
+                  isPro={subscription.isPro}
+                  onOpenSubscription={() => setIsSubscriptionModalOpen(true)}
                   onOpenAddModal={handleOpenAddModal}
                   onSelectTransaction={handleSelectTransaction}
                   onGoToTab={setCurrentTab}
-                  onLoadDemoData={handleLoadDemoData}
                   onQuickAddPreset={handleQuickAddPreset}
                 />
               )}
@@ -232,6 +290,8 @@ export default function App() {
                   selectedMonth={selectedMonth}
                   onSelectTransaction={handleSelectTransaction}
                   onOpenAddModal={() => handleOpenAddModal('expense')}
+                  isPro={subscription.isPro}
+                  onOpenSubscription={() => setIsSubscriptionModalOpen(true)}
                 />
               )}
 
@@ -240,9 +300,12 @@ export default function App() {
                   savingsGoals={savingsGoals}
                   categories={categories}
                   transactions={transactions}
+                  reminders={reminders}
                   selectedMonth={selectedMonth}
                   onUpdateGoals={handleUpdateGoals}
                   onUpdateCategories={handleUpdateCategories}
+                  onUpdateReminders={handleUpdateReminders}
+                  onAddTransaction={handleSaveTransaction}
                 />
               )}
 
@@ -278,6 +341,25 @@ export default function App() {
           categories={categories}
           editingTransaction={editingTransaction}
           initialType={modalType}
+          isPro={subscription.isPro}
+          onOpenSubscription={() => setIsSubscriptionModalOpen(true)}
+        />
+
+        {/* Subscription Modal */}
+        <SubscriptionModal
+          isOpen={isSubscriptionModalOpen}
+          onClose={() => setIsSubscriptionModalOpen(false)}
+          isProActive={subscription.isPro}
+          onActivatePro={handleActivatePro}
+        />
+
+        {/* Manager & Admin Panel Modal */}
+        <ManagerPanelModal
+          isOpen={isManagerModalOpen}
+          onClose={() => setIsManagerModalOpen(false)}
+          onForceProGlobal={handleActivatePro}
+          currentIsPro={subscription.isPro}
+          currentPlanName={subscription.planName}
         />
       </div>
     </div>

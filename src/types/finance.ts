@@ -126,3 +126,47 @@ export const DEFAULT_QUICK_PRESETS: QuickPreset[] = [
   { id: 'p9', title: 'Freelance / Extra', type: 'income', category: 'Freelance & Projetos', defaultAmount: 450.0, paymentMethod: 'pix' },
 ];
 
+export interface Reminder {
+  id: string;
+  title: string;
+  amount: number;
+  dueDate: string; // YYYY-MM-DD
+  category: string;
+  isPaid: boolean;
+  paymentMethod?: PaymentMethod;
+  notes?: string;
+}
+
+export const INITIAL_REMINDERS: Reminder[] = [
+  {
+    id: 'rem-1',
+    title: 'Fatura Cartão Nubank',
+    amount: 1450.00,
+    dueDate: new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10),
+    category: 'Moradia & Contas',
+    isPaid: false,
+    paymentMethod: 'credit_card',
+    notes: 'Vencimento dia 25'
+  },
+  {
+    id: 'rem-2',
+    title: 'Internet Fibra Óptica',
+    amount: 119.90,
+    dueDate: new Date(Date.now() + 86400000 * 5).toISOString().slice(0, 10),
+    category: 'Moradia & Contas',
+    isPaid: false,
+    paymentMethod: 'pix',
+    notes: 'Débito automático'
+  },
+  {
+    id: 'rem-3',
+    title: 'Seguro do Automóvel',
+    amount: 230.00,
+    dueDate: new Date(Date.now() + 86400000 * 10).toISOString().slice(0, 10),
+    category: 'Transporte & Combustível',
+    isPaid: false,
+    paymentMethod: 'credit_card'
+  }
+];
+
+

@@ -14,7 +14,9 @@ import {
   Sparkles,
   ClipboardPaste,
   HelpCircle,
-  Plus
+  Plus,
+  Percent,
+  Calculator
 } from 'lucide-react';
 import { 
   Transaction, 
@@ -37,6 +39,8 @@ interface TransactionModalProps {
   categories: Category[];
   editingTransaction?: Transaction | null;
   initialType?: TransactionType;
+  isPro?: boolean;
+  onOpenSubscription?: () => void;
 }
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
@@ -47,6 +51,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   categories,
   editingTransaction,
   initialType = 'expense',
+  isPro = false,
+  onOpenSubscription,
 }) => {
   const [type, setType] = useState<TransactionType>(initialType);
   const [amountStr, setAmountStr] = useState<string>('');
@@ -66,6 +72,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   // Smart Paste panel state
   const [showPastePanel, setShowPastePanel] = useState(false);
   const [pastedText, setPastedText] = useState('');
+
+  // Subvalue & Tax/Fee Calculator state
+  const [showFeeCalculator, setShowFeeCalculator] = useState(false);
+  const [subAmountStr, setSubAmountStr] = useState('');
+  const [feePercentStr, setFeePercentStr] = useState('3.5');
+  const [fixedFeeStr, setFixedFeeStr] = useState('');
+  const [feeMode, setFeeMode] = useState<'percent' | 'fixed'>('percent');
 
   const recognitionRef = useRef<any>(null);
 
@@ -147,8 +160,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     }
   };
 
-  // Toggle Voice Recognition - strictly on user click
+  // Toggle Voice Recognition - strictly on user click and gated for Pro
   const toggleVoiceRecognition = async () => {
+    if (!isPro) {
+      if (onOpenSubscription) onOpenSubscription();
+      setVoiceFeedback('🎙️ A adição por voz via Inteligência Artificial é exclusiva do Plano Pro VIP!');
+      setTimeout(() => setVoiceFeedback(null), 5000);
+      return;
+    }
+
     // If currently listening, stop it
     if (isListening && recognitionRef.current) {
       try {
@@ -488,9 +508,30 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
           {/* Amount input & Quick Sum Chips */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Valor (R$)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-slate-300">
+                Valor Final (R$)
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!showFeeCalculator) {
+                    setSubAmountStr(amountStr || '');
+                  }
+                  setShowFeeCalculator(!showFeeCalculator);
+                }}
+                className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg border transition ${
+                  showFeeCalculator
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white hover:border-slate-600'
+                }`}
+                title="Calcular valor base com taxa de cartão, entrega ou juros"
+              >
+                <Calculator className="w-3.5 h-3.5 text-amber-400" />
+                <span>Calcular com Taxa</span>
+              </button>
+            </div>
+
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
                 R$
@@ -510,6 +551,127 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 }`}
               />
             </div>
+
+            {/* Subvalue and Tax Calculator Breakdown */}
+            {showFeeCalculator && (
+              <div className="mt-2.5 p-3.5 bg-slate-950 border border-amber-500/30 rounded-2xl space-y-3 animate-in fade-in">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <Percent className="w-3.5 h-3.5 text-amber-400" />
+                    Cálculo de Subvalor Real & Taxa
+                  </span>
+                  <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setFeeMode('percent')}
+                      className={`px-2 py-0.5 rounded-md font-semibold ${feeMode === 'percent' ? 'bg-amber-500 text-slate-950' : 'text-slate-400'}`}
+                    >
+                      % Percentual
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFeeMode('fixed')}
+                      className={`px-2 py-0.5 rounded-md font-semibold ${feeMode === 'fixed' ? 'bg-amber-500 text-slate-950' : 'text-slate-400'}`}
+                    >
+                      R$ Fixo
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label className="text-[11px] text-slate-400 mb-1 block">Subvalor Real (Base):</label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="100.00"
+                        value={subAmountStr}
+                        onChange={(e) => setSubAmountStr(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-slate-400 mb-1 block">
+                      {feeMode === 'percent' ? 'Taxa / Acréscimo (%):' : 'Taxa Fixa (R$):'}
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs">
+                        {feeMode === 'percent' ? '%' : 'R$'}
+                      </span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder={feeMode === 'percent' ? '3.5' : '5.00'}
+                        value={feeMode === 'percent' ? feePercentStr : fixedFeeStr}
+                        onChange={(e) => {
+                          if (feeMode === 'percent') setFeePercentStr(e.target.value);
+                          else setFixedFeeStr(e.target.value);
+                        }}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 font-semibold"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick fee percent pills */}
+                {feeMode === 'percent' && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-500">Taxas comuns:</span>
+                    {['1.99', '2.5', '3.5', '4.99', '10'].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setFeePercentStr(p)}
+                        className="px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-[10px] text-slate-300 font-mono"
+                      >
+                        {p}%
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Calculation summary */}
+                {(() => {
+                  const subVal = parseFloat(subAmountStr.replace(',', '.')) || 0;
+                  const feeVal = feeMode === 'percent' 
+                    ? subVal * ((parseFloat(feePercentStr.replace(',', '.')) || 0) / 100)
+                    : (parseFloat(fixedFeeStr.replace(',', '.')) || 0);
+                  const totalWithFee = subVal + feeVal;
+
+                  return (
+                    <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="text-[10px] text-slate-400">
+                          Subvalor: <strong className="text-white">{formatBRL(subVal)}</strong> + Taxa: <strong className="text-amber-400">{formatBRL(feeVal)}</strong>
+                        </div>
+                        <div className="text-xs font-bold text-emerald-400">
+                          Total Calculado: {formatBRL(totalWithFee)}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (totalWithFee > 0) {
+                            setAmountStr(totalWithFee.toFixed(2));
+                            const noteDetail = `Subvalor real: ${formatBRL(subVal)} | Taxa: ${formatBRL(feeVal)}`;
+                            setNotes(prev => prev ? `${prev} • ${noteDetail}` : noteDetail);
+                            setShowFeeCalculator(false);
+                          }
+                        }}
+                        disabled={totalWithFee <= 0}
+                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition shadow active:scale-95"
+                      >
+                        Aplicar
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
             {/* Fast numeric addition chips */}
             <div className="flex items-center gap-1.5 mt-2">

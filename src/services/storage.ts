@@ -2,14 +2,17 @@ import {
   Transaction, 
   Category, 
   SavingsGoal, 
+  Reminder,
   DEFAULT_CATEGORIES, 
-  INITIAL_SAVINGS_GOALS 
+  INITIAL_SAVINGS_GOALS,
+  INITIAL_REMINDERS
 } from '../types/finance';
 
 const STORAGE_KEYS = {
   TRANSACTIONS: 'finanbolso_user_transactions_v2',
   CATEGORIES: 'finanbolso_categories_v1',
   SAVINGS_GOALS: 'finanbolso_user_goals_v2',
+  REMINDERS: 'finanbolso_user_reminders_v1',
   INITIALIZED: 'finanbolso_user_clean_v2',
 };
 
@@ -333,38 +336,72 @@ export const StorageService = {
     }
   },
 
-  resetToDemoData(): { transactions: Transaction[]; categories: Category[]; goals: SavingsGoal[] } {
+  getReminders(): Reminder[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.REMINDERS);
+      if (!data) {
+        this.saveReminders(INITIAL_REMINDERS);
+        return INITIAL_REMINDERS;
+      }
+      return JSON.parse(data);
+    } catch (e) {
+      console.error('Erro ao carregar lembretes:', e);
+      return INITIAL_REMINDERS;
+    }
+  },
+
+  saveReminders(reminders: Reminder[]): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(reminders));
+    } catch (e) {
+      console.error('Erro ao salvar lembretes:', e);
+    }
+  },
+
+  resetToDemoData(): { transactions: Transaction[]; categories: Category[]; goals: SavingsGoal[]; reminders: Reminder[] } {
     const transactions = generateInitialDemoData();
     const categories = DEFAULT_CATEGORIES;
     const goals = INITIAL_SAVINGS_GOALS;
+    const reminders = INITIAL_REMINDERS;
 
     this.saveTransactions(transactions);
     this.saveCategories(categories);
     this.saveSavingsGoals(goals);
+    this.saveReminders(reminders);
 
-    return { transactions, categories, goals };
+    return { transactions, categories, goals, reminders };
   },
 
   clearAllData(): void {
     localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS);
     localStorage.removeItem(STORAGE_KEYS.CATEGORIES);
     localStorage.removeItem(STORAGE_KEYS.SAVINGS_GOALS);
+    localStorage.removeItem(STORAGE_KEYS.REMINDERS);
     localStorage.removeItem(STORAGE_KEYS.INITIALIZED);
     localStorage.removeItem('finanbolso_transactions_v1');
     localStorage.removeItem('finanbolso_goals_v1');
     localStorage.removeItem('finanbolso_initialized_v1');
     this.saveTransactions([]);
     this.saveSavingsGoals([]);
+    this.saveReminders([]);
   },
 
   exportBackupJSON(): string {
+    let deviceId = localStorage.getItem('finanbolso_device_id');
+    if (!deviceId) {
+      deviceId = `device-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      localStorage.setItem('finanbolso_device_id', deviceId);
+    }
     const backup = {
-      version: 1,
+      version: 2,
       appName: 'FinanBolso',
+      deviceId,
       exportedAt: new Date().toISOString(),
       transactions: this.getTransactions(),
       categories: this.getCategories(),
       savingsGoals: this.getSavingsGoals(),
+      reminders: this.getReminders(),
+      subscription: this.getSubscription(),
     };
     return JSON.stringify(backup, null, 2);
   },
@@ -381,10 +418,40 @@ export const StorageService = {
       if (Array.isArray(parsed.savingsGoals)) {
         this.saveSavingsGoals(parsed.savingsGoals);
       }
+      if (Array.isArray(parsed.reminders)) {
+        this.saveReminders(parsed.reminders);
+      }
+      if (parsed.subscription) {
+        this.saveSubscription(parsed.subscription);
+      }
       return true;
     } catch (e) {
       console.error('Falha ao importar arquivo JSON de backup:', e);
       return false;
     }
+  },
+
+  getSubscription(): { isPro: boolean; planName: string; expiresAt: number } {
+    try {
+      const data = localStorage.getItem('finanbolso_subscription_v1');
+      if (!data) return { isPro: false, planName: 'Gratuito', expiresAt: 0 };
+      const parsed = JSON.parse(data);
+      // Auto-expire check when subscription timestamp has passed
+      if (parsed.isPro && parsed.expiresAt > 0 && parsed.expiresAt < Date.now()) {
+        const expired = { isPro: false, planName: 'Expirado', expiresAt: parsed.expiresAt };
+        this.saveSubscription(expired);
+        return expired;
+      }
+      return parsed;
+    } catch (e) {
+      return { isPro: false, planName: 'Gratuito', expiresAt: 0 };
+    }
+  },
+
+  saveSubscription(sub: { isPro: boolean; planName: string; expiresAt: number }): void {
+    try {
+      localStorage.setItem('finanbolso_subscription_v1', JSON.stringify(sub));
+    } catch (e) {}
   }
 };
+

@@ -127,21 +127,7 @@ export const ExportTab: React.FC<ExportTabProps> = ({
     e.target.value = '';
   };
 
-  // Reset to Demo Data
-  const handleResetDemo = () => {
-    setConfirmAction({
-      title: 'Recarregar Dados Demo',
-      message: 'Deseja recarregar os lançamentos de exemplo? Os dados atuais serão substituídos pelos de teste.',
-      confirmLabel: 'Sim, Restaurar',
-      isDestructive: false,
-      onConfirm: () => {
-        StorageService.resetToDemoData();
-        onRefreshData();
-        showFeedback('success', 'Dados de exemplo restaurados.');
-        setConfirmAction(null);
-      },
-    });
-  };
+
 
   // Clear All Data
   const handleClearAll = () => {
@@ -265,6 +251,8 @@ export const ExportTab: React.FC<ExportTabProps> = ({
         </div>
       </div>
 
+
+
       {/* PWA Install Block */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 shadow-sm space-y-3">
         <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
@@ -318,15 +306,7 @@ export const ExportTab: React.FC<ExportTabProps> = ({
         </div>
 
         {/* Data Maintenance */}
-        <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-          <button
-            onClick={handleResetDemo}
-            className="flex items-center gap-1.5 text-slate-400 hover:text-emerald-400 transition"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Recarregar Dados Demo</span>
-          </button>
-
+        <div className="pt-3 border-t border-slate-800/80 flex items-center justify-end text-xs">
           <button
             onClick={handleClearAll}
             className="flex items-center gap-1.5 text-red-400/80 hover:text-red-400 transition"
