@@ -27,7 +27,7 @@ import {
   DEFAULT_QUICK_PRESETS,
   QuickPreset
 } from '../types/finance';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { parseFinancialText } from '../services/voiceParser';
 import { formatBRL } from '../services/exportService';
 
@@ -304,17 +304,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4">
-      <motion.div 
-        initial={{ y: '100%', opacity: 0.6 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: '100%', opacity: 0 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-        className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92dvh] flex flex-col overflow-hidden gpu-layer"
-      >
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 gpu-layer">
+          <motion.div 
+            initial={{ y: 24, opacity: 0, scale: 0.98 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 16, opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92dvh] flex flex-col overflow-hidden gpu-layer"
+          >
         {/* Modal Header */}
         <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/70 shrink-0">
           <div>
@@ -878,6 +878,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </div>
         </form>
       </motion.div>
-    </div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 };

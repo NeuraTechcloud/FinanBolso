@@ -1,17 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { 
   PieChart, 
   BarChart3, 
   Calendar, 
-  TrendingDown, 
-  TrendingUp, 
   CreditCard, 
-  DollarSign, 
-  Layers, 
-  ArrowUpRight,
-  ArrowDownRight,
   Info
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Transaction, Category, PAYMENT_METHOD_LABELS, PaymentMethod } from '../../types/finance';
 import { formatBRL } from '../../services/exportService';
 
@@ -42,13 +37,312 @@ interface ChartsTabProps {
   selectedMonth: string;
 }
 
-export const ChartsTab: React.FC<ChartsTabProps> = ({
+// Memoized Sub-chart View 1: Category Donut Chart
+const CategoryDonutView = memo<{
+  categoryStats: CategoryStatItem[];
+  donutSlices: DonutSliceItem[];
+  totalExpense: number;
+  selectedCategoryName: string | null;
+  onSelectCategory: (name: string | null) => void;
+}>(({ categoryStats, donutSlices, totalExpense, selectedCategoryName, onSelectCategory }) => {
+  const selectedCat = categoryStats.find((c) => c.name === selectedCategoryName);
+
+  return (
+    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-sm space-y-4 gpu-layer">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-white">Gastos por Categoria</h3>
+          <p className="text-xs text-slate-400">Toque em uma fatia ou categoria para filtrar</p>
+        </div>
+        <span className="text-xs font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded-full border border-red-500/20 tabular-nums">
+          {formatBRL(totalExpense)}
+        </span>
+      </div>
+
+      {categoryStats.length === 0 ? (
+        <div className="py-12 text-center text-slate-400 text-xs">
+          Nenhuma despesa registrada neste período para gerar o gráfico.
+        </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row items-center justify-around gap-6">
+          {/* SVG Donut */}
+          <div className="relative w-48 h-48 shrink-0">
+            <svg viewBox="0 0 200 200" className="w-full h-full transform -rotate-90">
+              {donutSlices.map((slice) => {
+                const isHighlighted = selectedCategoryName === slice.name;
+                return (
+                  <path
+                    key={slice.name}
+                    d={slice.pathData}
+                    fill={slice.color}
+                    opacity={selectedCategoryName ? (isHighlighted ? 1 : 0.35) : 0.9}
+                    className="cursor-pointer transition-all duration-150 hover:opacity-100"
+                    onClick={() => onSelectCategory(selectedCategoryName === slice.name ? null : slice.name)}
+                  />
+                );
+              })}
+              {/* Inner hole */}
+              <circle cx="100" cy="100" r="48" fill="#0f172a" />
+            </svg>
+
+            {/* Center Text inside Donut */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none p-2">
+              <span className="text-[10px] text-slate-400 leading-tight">
+                {selectedCat ? selectedCat.name : 'Total Gasto'}
+              </span>
+              <span className="text-xs font-extrabold text-white leading-tight tabular-nums">
+                {selectedCat ? formatBRL(selectedCat.total) : formatBRL(totalExpense)}
+              </span>
+              <span className="text-[10px] font-bold text-emerald-400 tabular-nums">
+                {selectedCat ? `${selectedCat.percentage.toFixed(1)}%` : `${categoryStats.length} itens`}
+              </span>
+            </div>
+          </div>
+
+          {/* Category List Breakdown */}
+          <div className="w-full space-y-2 max-h-56 overflow-y-auto pr-1 mobile-scroll">
+            {categoryStats.map((item) => {
+              const isSelected = selectedCategoryName === item.name;
+              return (
+                <div
+                  key={item.name}
+                  onClick={() => onSelectCategory(isSelected ? null : item.name)}
+                  className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between text-xs ${
+                    isSelected
+                      ? 'bg-slate-800 border-emerald-500 shadow-sm'
+                      : 'bg-slate-950/40 border-slate-800/80 hover:bg-slate-800/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="font-semibold text-slate-200 truncate">{item.name}</span>
+                    <span className="text-[10px] text-slate-400">({item.count})</span>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="font-bold text-white tabular-nums">{formatBRL(item.total)}</span>
+                    <span className="text-[10px] text-slate-400 ml-1.5 font-semibold tabular-nums">
+                      {item.percentage.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+CategoryDonutView.displayName = 'CategoryDonutView';
+
+// Memoized Sub-chart View 2: Monthly Comparison
+const MonthlyBarView = memo<{
+  monthlyComparison: MonthlyCompItem[];
+  maxMonthVal: number;
+  selectedMonth: string;
+}>(({ monthlyComparison, maxMonthVal, selectedMonth }) => {
+  return (
+    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-sm space-y-4 gpu-layer">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-white">Evolução Mensal (Últimos 6 Meses)</h3>
+          <p className="text-xs text-slate-400">Comparativo de Receitas vs Despesas</p>
+        </div>
+        <div className="flex items-center gap-3 text-[11px]">
+          <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Receita
+          </span>
+          <span className="flex items-center gap-1 text-red-400 font-semibold">
+            <span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block" /> Despesa
+          </span>
+        </div>
+      </div>
+
+      {/* Bar Chart Canvas */}
+      <div className="pt-6 pb-2">
+        <div className="h-44 flex items-end justify-between gap-2 border-b border-slate-800 pb-2">
+          {monthlyComparison.map((m) => {
+            const incHeight = maxMonthVal > 0 ? (m.income / maxMonthVal) * 100 : 0;
+            const expHeight = maxMonthVal > 0 ? (m.expense / maxMonthVal) * 100 : 0;
+            const isCurrentMonth = m.monthKey === selectedMonth;
+
+            return (
+              <div key={m.monthKey} className="flex-1 flex flex-col items-center h-full justify-end group">
+                <div className="w-full flex items-end justify-center gap-1 h-36">
+                  <div
+                    className="w-1/2 max-w-[14px] bg-emerald-500/90 rounded-t-sm transition-all group-hover:brightness-125"
+                    style={{ height: `${Math.max(4, incHeight)}%` }}
+                    title={`Receitas em ${m.label}: ${formatBRL(m.income)}`}
+                  />
+                  <div
+                    className="w-1/2 max-w-[14px] bg-red-500/90 rounded-t-sm transition-all group-hover:brightness-125"
+                    style={{ height: `${Math.max(4, expHeight)}%` }}
+                    title={`Despesas em ${m.label}: ${formatBRL(m.expense)}`}
+                  />
+                </div>
+                <span 
+                  className={`text-[10px] mt-2 font-medium truncate ${
+                    isCurrentMonth ? 'text-emerald-400 font-bold' : 'text-slate-400'
+                  }`}
+                >
+                  {m.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Summary table */}
+      <div className="divide-y divide-slate-800/60 text-xs pt-1">
+        {monthlyComparison.map((m) => {
+          const net = m.income - m.expense;
+          return (
+            <div key={m.monthKey} className="py-2 flex items-center justify-between">
+              <span className="font-semibold text-slate-300">{m.label}</span>
+              <div className="flex items-center gap-3 tabular-nums">
+                <span className="text-emerald-400">{formatBRL(m.income)}</span>
+                <span className="text-red-400">{formatBRL(m.expense)}</span>
+                <span className={`font-bold ${net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {net >= 0 ? '+' : ''}{formatBRL(net)}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+MonthlyBarView.displayName = 'MonthlyBarView';
+
+// Memoized Sub-chart View 3: Daily Spending
+const DailyBarView = memo<{
+  dailyExpenses: Record<number, number>;
+  maxDaily: number;
+  averagePerDay: number;
+  highestSingleExpense: Transaction | null;
+}>(({ dailyExpenses, maxDaily, averagePerDay, highestSingleExpense }) => {
+  return (
+    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-sm space-y-4 gpu-layer">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-white">Trajetória Diária de Gastos</h3>
+          <p className="text-xs text-slate-400">Dias 1 a 31 do mês selecionado</p>
+        </div>
+        <span className="text-xs text-slate-400">
+          Média: <strong className="text-white tabular-nums">{formatBRL(averagePerDay)}/dia</strong>
+        </span>
+      </div>
+
+      {/* Daily Bar Histogram */}
+      <div className="h-40 flex items-end justify-between gap-1 pt-6 border-b border-slate-800 pb-2 overflow-x-auto">
+        {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
+          const val = dailyExpenses[day] || 0;
+          const heightPct = maxDaily > 0 ? (val / maxDaily) * 100 : 0;
+          const hasExpense = val > 0;
+
+          return (
+            <div 
+              key={day} 
+              className="flex-1 flex flex-col items-center justify-end h-full group min-w-[7px]"
+              title={`Dia ${day}: ${formatBRL(val)}`}
+            >
+              <div
+                className={`w-full rounded-t-xs transition-all ${
+                  hasExpense ? 'bg-emerald-500 hover:bg-emerald-300' : 'bg-slate-800'
+                }`}
+                style={{ height: `${hasExpense ? Math.max(8, heightPct) : 3}%` }}
+              />
+              {day % 5 === 0 && (
+                <span className="text-[9px] text-slate-500 mt-1 font-mono">
+                  {day}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs flex items-center justify-between text-slate-300">
+        <span>Maior gasto pontual:</span>
+        <span className="font-bold text-red-400 tabular-nums">
+          {highestSingleExpense ? `${highestSingleExpense.description} (${formatBRL(highestSingleExpense.amount)})` : 'Nenhum'}
+        </span>
+      </div>
+    </div>
+  );
+});
+
+DailyBarView.displayName = 'DailyBarView';
+
+// Memoized Sub-chart View 4: Payment Methods
+const PaymentMethodView = memo<{
+  sortedPaymentMethods: [string, { total: number; count: number }][];
+  totalExpense: number;
+}>(({ sortedPaymentMethods, totalExpense }) => {
+  return (
+    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-sm space-y-4 gpu-layer">
+      <div>
+        <h3 className="text-sm font-bold text-white">Formas de Pagamento Mais Utilizadas</h3>
+        <p className="text-xs text-slate-400">Divisão das despesas por meio de liquidação</p>
+      </div>
+
+      <div className="space-y-3">
+        {sortedPaymentMethods.map(([methodKey, stats]) => {
+          const label = PAYMENT_METHOD_LABELS[methodKey as PaymentMethod]?.label || methodKey;
+          const pct = totalExpense > 0 ? (stats.total / totalExpense) * 100 : 0;
+
+          return (
+            <div key={methodKey} className="space-y-1.5 p-3 rounded-2xl bg-slate-950/50 border border-slate-800">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-white flex items-center gap-2">
+                  <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+                  {label}
+                  <span className="text-[10px] text-slate-400 font-normal">({stats.count}x)</span>
+                </span>
+                <div className="text-right">
+                  <span className="font-bold text-white tabular-nums">{formatBRL(stats.total)}</span>
+                  <span className="text-xs text-slate-400 ml-2 font-semibold tabular-nums">{pct.toFixed(1)}%</span>
+                </div>
+              </div>
+              <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+PaymentMethodView.displayName = 'PaymentMethodView';
+
+export const ChartsTab: React.FC<ChartsTabProps> = memo(({
   transactions,
   categories,
   selectedMonth,
 }) => {
   const [activeChart, setActiveChart] = useState<'categories' | 'monthly' | 'daily' | 'payment'>('categories');
   const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
+
+  // Category color lookup map
+  const categoryColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (let i = 0; i < categories.length; i++) {
+      map[categories[i].name] = categories[i].color;
+    }
+    return map;
+  }, [categories]);
 
   // Filter transactions for currently selected month
   const monthTransactions = useMemo(() => {
@@ -57,9 +351,8 @@ export const ChartsTab: React.FC<ChartsTabProps> = ({
       : transactions.filter(t => t.date.startsWith(selectedMonth));
   }, [transactions, selectedMonth]);
 
-  const { expenseTransactions, totalExpense, incomeTransactions, totalIncome } = useMemo(() => {
+  const { expenseTransactions, totalExpense, totalIncome } = useMemo(() => {
     const expenses: Transaction[] = [];
-    const incomes: Transaction[] = [];
     let expTotal = 0;
     let incTotal = 0;
 
@@ -69,14 +362,12 @@ export const ChartsTab: React.FC<ChartsTabProps> = ({
         expenses.push(t);
         expTotal += t.amount;
       } else {
-        incomes.push(t);
         incTotal += t.amount;
       }
     }
     return {
       expenseTransactions: expenses,
       totalExpense: expTotal,
-      incomeTransactions: incomes,
       totalIncome: incTotal,
     };
   }, [monthTransactions]);
@@ -88,11 +379,10 @@ export const ChartsTab: React.FC<ChartsTabProps> = ({
     for (let i = 0; i < expenseTransactions.length; i++) {
       const t = expenseTransactions[i];
       if (!catMap[t.category]) {
-        const cat = categories.find(c => c.name === t.category);
         catMap[t.category] = {
           total: 0,
           count: 0,
-          color: cat ? cat.color : '#94a3b8',
+          color: categoryColorMap[t.category] || '#94a3b8',
         };
       }
       catMap[t.category].total += t.amount;
@@ -136,12 +426,11 @@ export const ChartsTab: React.FC<ChartsTabProps> = ({
     });
 
     return { categoryStats: stats, donutSlices: slices };
-  }, [expenseTransactions, totalExpense, categories]);
+  }, [expenseTransactions, totalExpense, categoryColorMap]);
 
   // Monthly comparison data for the last 6 months
   const { monthlyComparison, maxMonthVal } = useMemo(() => {
     const list: MonthlyCompItem[] = [];
-
     const now = new Date();
     const shortLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -220,8 +509,6 @@ export const ChartsTab: React.FC<ChartsTabProps> = ({
     return Object.entries(paymentBreakdown).sort((a, b) => b[1].total - a[1].total);
   }, [expenseTransactions]);
 
-  const selectedCat = categoryStats.find((c: CategoryStatItem) => c.name === selectedCategoryName);
-
   return (
     <div className="space-y-4 pb-24 animate-in fade-in">
       {/* Sub-nav switcher */}
@@ -275,268 +562,51 @@ export const ChartsTab: React.FC<ChartsTabProps> = ({
         </button>
       </div>
 
-      {/* 1. CHART VIEW: Categories Donut & Breakdown */}
-      {activeChart === 'categories' && (
-        <div className="space-y-4">
-          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-white">Gastos por Categoria</h3>
-                <p className="text-xs text-slate-400">Toque em uma fatia ou categoria para filtrar</p>
-              </div>
-              <span className="text-xs font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded-full border border-red-500/20">
-                {formatBRL(totalExpense)}
-              </span>
-            </div>
+      {/* Animated Chart Switcher with zero layout shift */}
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.div
+          key={activeChart}
+          initial={{ opacity: 0, scale: 0.99 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.99 }}
+          transition={{ duration: 0.12, ease: "easeOut" }}
+          className="w-full"
+        >
+          {activeChart === 'categories' && (
+            <CategoryDonutView
+              categoryStats={categoryStats}
+              donutSlices={donutSlices}
+              totalExpense={totalExpense}
+              selectedCategoryName={selectedCategoryName}
+              onSelectCategory={setSelectedCategoryName}
+            />
+          )}
 
-            {categoryStats.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 text-xs">
-                Nenhuma despesa registrada neste período para gerar o gráfico.
-              </div>
-            ) : (
-              <div className="flex flex-col sm:flex-row items-center justify-around gap-6">
-                {/* SVG Donut */}
-                <div className="relative w-48 h-48 shrink-0">
-                  <svg viewBox="0 0 200 200" className="w-full h-full transform -rotate-90">
-                    {donutSlices.map((slice) => {
-                      const isHighlighted = selectedCategoryName === slice.name;
-                      return (
-                        <path
-                          key={slice.name}
-                          d={slice.pathData}
-                          fill={slice.color}
-                          opacity={selectedCategoryName ? (isHighlighted ? 1 : 0.35) : 0.9}
-                          className="cursor-pointer transition-all duration-200 hover:opacity-100"
-                          onClick={() => {
-                            setSelectedCategoryName(
-                              selectedCategoryName === slice.name ? null : slice.name
-                            );
-                          }}
-                        />
-                      );
-                    })}
-                    {/* Inner hole for donut appearance */}
-                    <circle cx="100" cy="100" r="48" fill="#0f172a" />
-                  </svg>
+          {activeChart === 'monthly' && (
+            <MonthlyBarView
+              monthlyComparison={monthlyComparison}
+              maxMonthVal={maxMonthVal}
+              selectedMonth={selectedMonth}
+            />
+          )}
 
-                  {/* Center Text inside Donut */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none p-2">
-                    <span className="text-[10px] text-slate-400 leading-tight">
-                      {selectedCat ? selectedCat.name : 'Total Gasto'}
-                    </span>
-                    <span className="text-xs font-extrabold text-white leading-tight">
-                      {selectedCat ? formatBRL(selectedCat.total) : formatBRL(totalExpense)}
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-400">
-                      {selectedCat ? `${selectedCat.percentage.toFixed(1)}%` : `${categoryStats.length} itens`}
-                    </span>
-                  </div>
-                </div>
+          {activeChart === 'daily' && (
+            <DailyBarView
+              dailyExpenses={dailyExpenses}
+              maxDaily={maxDaily}
+              averagePerDay={averagePerDay}
+              highestSingleExpense={highestSingleExpense}
+            />
+          )}
 
-                {/* Category List Breakdown */}
-                <div className="w-full space-y-2 max-h-56 overflow-y-auto pr-1">
-                  {categoryStats.map((item) => {
-                    const isSelected = selectedCategoryName === item.name;
-                    return (
-                      <div
-                        key={item.name}
-                        onClick={() => setSelectedCategoryName(isSelected ? null : item.name)}
-                        className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between text-xs ${
-                          isSelected
-                            ? 'bg-slate-800 border-emerald-500 shadow-sm'
-                            : 'bg-slate-950/40 border-slate-800/80 hover:bg-slate-800/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span
-                            className="w-3 h-3 rounded-full shrink-0 shadow-sm"
-                            style={{ backgroundColor: item.color }}
-                          />
-                          <span className="font-semibold text-slate-200 truncate">{item.name}</span>
-                          <span className="text-[10px] text-slate-400">({item.count})</span>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <span className="font-bold text-white">{formatBRL(item.total)}</span>
-                          <span className="text-[10px] text-slate-400 ml-1.5 font-semibold">
-                            {item.percentage.toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 2. CHART VIEW: Monthly Bar Chart Comparison */}
-      {activeChart === 'monthly' && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-white">Evolução Mensal (Últimos 6 Meses)</h3>
-              <p className="text-xs text-slate-400">Comparativo de Receitas vs Despesas</p>
-            </div>
-            <div className="flex items-center gap-3 text-[11px]">
-              <span className="flex items-center gap-1 text-emerald-400 font-semibold">
-                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Receita
-              </span>
-              <span className="flex items-center gap-1 text-red-400 font-semibold">
-                <span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block" /> Despesa
-              </span>
-            </div>
-          </div>
-
-          {/* Bar Chart Canvas */}
-          <div className="pt-6 pb-2">
-            <div className="h-44 flex items-end justify-between gap-2 border-b border-slate-800 pb-2">
-              {monthlyComparison.map((m) => {
-                const incHeight = maxMonthVal > 0 ? (m.income / maxMonthVal) * 100 : 0;
-                const expHeight = maxMonthVal > 0 ? (m.expense / maxMonthVal) * 100 : 0;
-                const isCurrentMonth = m.monthKey === selectedMonth;
-
-                return (
-                  <div key={m.monthKey} className="flex-1 flex flex-col items-center h-full justify-end group">
-                    <div className="w-full flex items-end justify-center gap-1 h-36">
-                      {/* Income Bar */}
-                      <div
-                        className="w-1/2 max-w-[14px] bg-emerald-500/90 rounded-t-sm transition-all group-hover:brightness-125 relative"
-                        style={{ height: `${Math.max(4, incHeight)}%` }}
-                        title={`Receitas em ${m.label}: ${formatBRL(m.income)}`}
-                      />
-                      {/* Expense Bar */}
-                      <div
-                        className="w-1/2 max-w-[14px] bg-red-500/90 rounded-t-sm transition-all group-hover:brightness-125 relative"
-                        style={{ height: `${Math.max(4, expHeight)}%` }}
-                        title={`Despesas em ${m.label}: ${formatBRL(m.expense)}`}
-                      />
-                    </div>
-                    {/* Month Label */}
-                    <span 
-                      className={`text-[10px] mt-2 font-medium truncate ${
-                        isCurrentMonth ? 'text-emerald-400 font-bold' : 'text-slate-400'
-                      }`}
-                    >
-                      {m.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Summary table of monthly evolution */}
-          <div className="divide-y divide-slate-800/60 text-xs pt-1">
-            {monthlyComparison.map((m) => {
-              const net = m.income - m.expense;
-              return (
-                <div key={m.monthKey} className="py-2 flex items-center justify-between">
-                  <span className="font-semibold text-slate-300">{m.label}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-emerald-400">{formatBRL(m.income)}</span>
-                    <span className="text-red-400">{formatBRL(m.expense)}</span>
-                    <span className={`font-bold ${net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {net >= 0 ? '+' : ''}{formatBRL(net)}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 3. CHART VIEW: Daily Spending in Month */}
-      {activeChart === 'daily' && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-white">Trajetória Diária de Gastos</h3>
-              <p className="text-xs text-slate-400">Dias 1 a 31 do mês selecionado</p>
-            </div>
-            <span className="text-xs text-slate-400">
-              Média: <strong className="text-white">{formatBRL(averagePerDay)}/dia</strong>
-            </span>
-          </div>
-
-          {/* Daily Bar Histogram */}
-          <div className="h-40 flex items-end justify-between gap-1 pt-6 border-b border-slate-800 pb-2 overflow-x-auto">
-            {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
-              const val = dailyExpenses[day] || 0;
-              const heightPct = maxDaily > 0 ? (val / maxDaily) * 100 : 0;
-              const hasExpense = val > 0;
-
-              return (
-                <div 
-                  key={day} 
-                  className="flex-1 flex flex-col items-center justify-end h-full group min-w-[7px]"
-                  title={`Dia ${day}: ${formatBRL(val)}`}
-                >
-                  <div
-                    className={`w-full rounded-t-xs transition-all ${
-                      hasExpense ? 'bg-emerald-500 hover:bg-emerald-300' : 'bg-slate-800'
-                    }`}
-                    style={{ height: `${hasExpense ? Math.max(8, heightPct) : 3}%` }}
-                  />
-                  {day % 5 === 0 && (
-                    <span className="text-[9px] text-slate-500 mt-1 font-mono">
-                      {day}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs flex items-center justify-between text-slate-300">
-            <span>Maior gasto pontual:</span>
-            <span className="font-bold text-red-400">
-              {highestSingleExpense ? `${highestSingleExpense.description} (${formatBRL(highestSingleExpense.amount)})` : 'Nenhum'}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* 4. CHART VIEW: Payment Methods Breakdown */}
-      {activeChart === 'payment' && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-sm space-y-4">
-          <div>
-            <h3 className="text-sm font-bold text-white">Formas de Pagamento Mais Utilizadas</h3>
-            <p className="text-xs text-slate-400">Divisão das despesas por meio de liquidação</p>
-          </div>
-
-          <div className="space-y-3">
-            {sortedPaymentMethods.map(([methodKey, stats]) => {
-              const label = PAYMENT_METHOD_LABELS[methodKey as PaymentMethod]?.label || methodKey;
-              const pct = totalExpense > 0 ? (stats.total / totalExpense) * 100 : 0;
-
-              return (
-                <div key={methodKey} className="space-y-1.5 p-3 rounded-2xl bg-slate-950/50 border border-slate-800">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-white flex items-center gap-2">
-                      <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
-                      {label}
-                      <span className="text-[10px] text-slate-400 font-normal">({stats.count}x)</span>
-                    </span>
-                    <div className="text-right">
-                      <span className="font-bold text-white">{formatBRL(stats.total)}</span>
-                      <span className="text-xs text-slate-400 ml-2 font-semibold">{pct.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                  <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+          {activeChart === 'payment' && (
+            <PaymentMethodView
+              sortedPaymentMethods={sortedPaymentMethods}
+              totalExpense={totalExpense}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Financial Health Summary Box */}
       <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-emerald-950/30 border border-emerald-500/20 text-xs text-slate-300 flex items-start gap-3">
@@ -551,4 +621,6 @@ export const ChartsTab: React.FC<ChartsTabProps> = ({
       </div>
     </div>
   );
-};
+});
+
+ChartsTab.displayName = 'ChartsTab';

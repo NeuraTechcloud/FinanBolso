@@ -18,7 +18,7 @@ import {
   CheckCheck,
   Trash2
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { PaymentService, PaymentPreferenceResponse } from '../services/paymentService';
 import { ActivationService } from '../services/activationService';
 import { StorageService } from '../services/storage';
@@ -162,13 +162,16 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-      <motion.div 
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        className="w-full max-w-lg bg-slate-900 border border-emerald-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] gpu-layer"
-      >
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 gpu-layer">
+          <motion.div 
+            initial={{ scale: 0.97, opacity: 0, y: 10 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.97, opacity: 0, y: 8 }}
+            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-lg bg-slate-900 border border-emerald-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] gpu-layer"
+          >
         {/* Header Banner */}
         <div className="relative p-6 bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 border-b border-slate-800 text-center">
           <button
@@ -554,6 +557,8 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           )}
         </div>
       </motion.div>
-    </div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 };

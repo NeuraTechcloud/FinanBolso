@@ -20,6 +20,17 @@
     -moz-osx-font-smoothing: grayscale;
     background-color: #020617;
     touch-action: manipulation;
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  /* Universal tabular numbers for monetary figures */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  /* Prevent text clipping and ensure smooth word breaks */
+  p, span, h1, h2, h3, h4, h5, h6 {
+    overflow-wrap: break-word;
   }
 
   /* Eliminate 300ms tap delay and double-tap zoom delay on interactive elements */

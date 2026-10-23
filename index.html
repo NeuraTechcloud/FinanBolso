@@ -15,14 +15,14 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="FinanBolso" />
     
-    <!-- Favicon & PWA Icons -->
+    <!-- Favicon & High Resolution PWA Icons -->
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="shortcut icon" href="/icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="mask-icon" href="/icon.svg" color="#10b981" />
 
     <style>
-      /* Preloader & Luxury Splash Screen Styling */
+      /* Preloader & Luxury Splash Screen Styling with Smooth Fade-out */
       body {
         margin: 0;
         background-color: #020617;
@@ -34,7 +34,7 @@
       .splash-container {
         position: fixed;
         inset: 0;
-        z-index: 9999;
+        z-index: 99999;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -42,6 +42,17 @@
         background: radial-gradient(circle at center, #064e3b 0%, #022c22 45%, #020617 90%);
         padding: 24px;
         box-sizing: border-box;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        pointer-events: auto;
+        will-change: opacity, visibility;
+      }
+
+      .splash-container.fade-out {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
       }
 
       .splash-logo-wrapper {
@@ -59,7 +70,7 @@
         inset: -12px;
         border-radius: 50%;
         border: 2px stroke transparent;
-        background: linear-gradient(135deg, rgba(52, 211, 153, 0.4), rgba(245, 158, 11, 0.4)) border-box;
+        background: linear-gradient(135deg, rgba(52, 211, 153, 0.5), rgba(245, 158, 11, 0.5)) border-box;
         -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
         -webkit-mask-composite: destination-out;
         mask-composite: exclude;
@@ -70,7 +81,7 @@
         position: absolute;
         inset: -24px;
         border-radius: 50%;
-        background: radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, transparent 70%);
+        background: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, transparent 70%);
         animation: pulseAura 2.5s ease-in-out infinite alternate;
       }
 
@@ -78,7 +89,7 @@
         width: 120px;
         height: 120px;
         border-radius: 32px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(16, 185, 129, 0.3);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 35px rgba(16, 185, 129, 0.35);
         transform: scale(1);
         animation: floatLogo 3s ease-in-out infinite alternate;
       }
@@ -98,11 +109,11 @@
       .splash-badge {
         font-size: 10px;
         font-weight: 800;
-        background: rgba(16, 185, 129, 0.2);
+        background: rgba(16, 185, 129, 0.25);
         color: #6ee7b7;
         padding: 2px 8px;
         border-radius: 9999px;
-        border: 1px solid rgba(16, 185, 129, 0.4);
+        border: 1px solid rgba(16, 185, 129, 0.5);
         text-transform: uppercase;
         letter-spacing: 1px;
       }
@@ -117,7 +128,7 @@
       .splash-progress-bar {
         width: 180px;
         height: 4px;
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.12);
         border-radius: 9999px;
         overflow: hidden;
         position: relative;
@@ -157,26 +168,28 @@
     </style>
   </head>
   <body class="bg-slate-950 text-slate-100 antialiased selection:bg-emerald-500 selection:text-white">
-    <div id="root">
-      <!-- Premium Splash Preloader -->
-      <div class="splash-container">
-        <div class="splash-logo-wrapper">
-          <div class="splash-aura"></div>
-          <div class="splash-ring"></div>
-          <img src="/icon.svg" alt="FinanBolso Logo" class="splash-icon" />
-        </div>
+    <!-- React App Container -->
+    <div id="root"></div>
 
-        <div class="splash-title">
-          <span>FinanBolso</span>
-          <span class="splash-badge">VIP</span>
-        </div>
-        <div class="splash-subtitle">Iniciando sistema de gestão financeira...</div>
+    <!-- Premium Splash Preloader (Rendered outside root so it smoothly fades out over React) -->
+    <div id="app-splash" class="splash-container">
+      <div class="splash-logo-wrapper">
+        <div class="splash-aura"></div>
+        <div class="splash-ring"></div>
+        <img src="/icon.svg" alt="FinanBolso Logo" class="splash-icon" />
+      </div>
 
-        <div class="splash-progress-bar">
-          <div class="splash-progress-fill"></div>
-        </div>
+      <div class="splash-title">
+        <span>FinanBolso</span>
+        <span class="splash-badge">VIP</span>
+      </div>
+      <div class="splash-subtitle">Iniciando sistema de gestão financeira...</div>
+
+      <div class="splash-progress-bar">
+        <div class="splash-progress-fill"></div>
       </div>
     </div>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

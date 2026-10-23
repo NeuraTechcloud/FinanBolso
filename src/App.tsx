@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StorageService } from './services/storage';
 import { Transaction, Category, SavingsGoal, QuickPreset, TransactionType, Reminder, UserSubscription } from './types/finance';
 import { ActivationService } from './services/activationService';
@@ -48,10 +48,10 @@ export default function App() {
     description: string;
   }>({ type: null, amount: 0, description: '' });
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
-  };
+  }, []);
 
   // Expose subscription and manager modal openers globally
   useEffect(() => {
@@ -63,13 +63,29 @@ export default function App() {
     };
   }, []);
 
-  // Load from local offline storage on mount & force device registration
+  // Load from local offline storage on mount & force device registration + dismiss splash preloader smoothly
   useEffect(() => {
     loadData();
-    ActivationService.registerDevicePresence(subscription);
+    ActivationService.registerDevicePresence(subscription).then((updatedSub) => {
+      if (updatedSub) {
+        setSubscription(updatedSub);
+      }
+    });
+
+    // Smooth fade-out transition for the HTML splash preloader
+    const splash = document.getElementById('app-splash');
+    if (splash) {
+      requestAnimationFrame(() => {
+        splash.classList.add('fade-out');
+        const timer = setTimeout(() => {
+          splash.remove();
+        }, 650);
+        return () => clearTimeout(timer);
+      });
+    }
   }, [subscription]);
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     const loadedTx = StorageService.getTransactions();
     const loadedCats = StorageService.getCategories();
     const loadedGoals = StorageService.getSavingsGoals();
@@ -78,10 +94,10 @@ export default function App() {
     setCategories(loadedCats);
     setSavingsGoals(loadedGoals);
     setReminders(loadedRem);
-  };
+  }, []);
 
   // Save/Update transaction
-  const handleSaveTransaction = (
+  const handleSaveTransaction = useCallback((
     txData: Omit<Transaction, 'id' | 'createdAt'>,
     existingId?: string
   ) => {
@@ -110,10 +126,10 @@ export default function App() {
     setTransactions(updated);
     StorageService.saveTransactions(updated);
     setEditingTransaction(null);
-  };
+  }, [transactions, showToast]);
 
   // Quick 1-Tap Preset Addition
-  const handleQuickAddPreset = (preset: QuickPreset) => {
+  const handleQuickAddPreset = useCallback((preset: QuickPreset) => {
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
     const newTx: Transaction = {
@@ -135,39 +151,37 @@ export default function App() {
       description: preset.title,
     });
     showToast(`✓ ${preset.title} (${formatBRL(newTx.amount)}) lançado no celular!`);
-  };
-
-
+  }, [transactions, showToast]);
 
   // Delete transaction
-  const handleDeleteTransaction = (id: string) => {
+  const handleDeleteTransaction = useCallback((id: string) => {
     const updated = transactions.filter(t => t.id !== id);
     setTransactions(updated);
     StorageService.saveTransactions(updated);
     setEditingTransaction(null);
     showToast('Lançamento excluído.');
-  };
+  }, [transactions, showToast]);
 
   // Update Savings Goals
-  const handleUpdateGoals = (newGoals: SavingsGoal[]) => {
+  const handleUpdateGoals = useCallback((newGoals: SavingsGoal[]) => {
     setSavingsGoals(newGoals);
     StorageService.saveSavingsGoals(newGoals);
-  };
+  }, []);
 
   // Update Categories & Budgets
-  const handleUpdateCategories = (newCategories: Category[]) => {
+  const handleUpdateCategories = useCallback((newCategories: Category[]) => {
     setCategories(newCategories);
     StorageService.saveCategories(newCategories);
-  };
+  }, []);
 
   // Update Reminders
-  const handleUpdateReminders = (newReminders: Reminder[]) => {
+  const handleUpdateReminders = useCallback((newReminders: Reminder[]) => {
     setReminders(newReminders);
     StorageService.saveReminders(newReminders);
-  };
+  }, []);
 
   // Activate Pro Subscription with duration (30 or 365 days) and distinct activationId
-  const handleActivatePro = (planName: string, durationDays: 30 | 365 = 365, activationId?: string) => {
+  const handleActivatePro = useCallback((planName: string, durationDays: 30 | 365 = 365, activationId?: string) => {
     const days: 30 | 365 = durationDays === 30 ? 30 : 365;
     const newSub = ActivationService.buildSubscription(days, activationId);
     newSub.planName = planName;
@@ -175,9 +189,9 @@ export default function App() {
     StorageService.saveSubscription(newSub);
     ActivationService.recordSubscriber(newSub);
     showToast(`✓ Plano Pro (${days} Dias) Ativado! ID: ${newSub.activationId}`);
-  };
+  }, [showToast]);
 
-  const handleResetSubscription = () => {
+  const handleResetSubscription = useCallback(() => {
     const freeSub: UserSubscription = {
       isPro: false,
       planName: 'Plano Gratuito',
@@ -187,21 +201,21 @@ export default function App() {
     setSubscription(freeSub);
     StorageService.saveSubscription(freeSub);
     showToast('✓ Plano Pro removido. Aparelho redefinido para o Gratuito.');
-  };
+  }, [showToast]);
 
   // Open modal for editing
-  const handleSelectTransaction = (tx: Transaction) => {
+  const handleSelectTransaction = useCallback((tx: Transaction) => {
     setEditingTransaction(tx);
     setModalType(tx.type);
     setIsModalOpen(true);
-  };
+  }, []);
 
   // Open modal for creating
-  const handleOpenAddModal = (prefillType: TransactionType = 'expense') => {
+  const handleOpenAddModal = useCallback((prefillType: TransactionType = 'expense') => {
     setEditingTransaction(null);
     setModalType(prefillType);
     setIsModalOpen(true);
-  };
+  }, []);
 
   return (
     <div className="h-[100dvh] w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-center overflow-hidden antialiased selection:bg-emerald-500 selection:text-white">
@@ -266,14 +280,14 @@ export default function App() {
           id="app-main-scroll"
           className="flex-1 min-h-0 overflow-y-auto overscroll-contain mobile-scroll px-4 pt-3 pb-24"
         >
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="popLayout" initial={false}>
             <motion.div
               key={currentTab}
-              initial={{ opacity: 0, y: 10, scale: 0.995 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -8, scale: 0.995 }}
-              transition={{ duration: 0.2, ease: [0.25, 1, 0.5, 1] }}
-              className="w-full"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.12, ease: "easeOut" }}
+              className="w-full gpu-layer"
             >
               {currentTab === 'home' && (
                 <HomeTab
@@ -373,6 +387,7 @@ export default function App() {
           isOpen={isManagerModalOpen}
           onClose={() => setIsManagerModalOpen(false)}
           onForceProGlobal={handleActivatePro}
+          onResetSubscriptionGlobal={handleResetSubscription}
           subscription={subscription}
         />
       </div>

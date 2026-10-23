@@ -229,8 +229,8 @@ export const ActivationService = {
     } catch {}
   },
 
-  // Force registration of device presence and unique device ID for ADM management
-  async registerDevicePresence(subscription: UserSubscription): Promise<void> {
+  // Force registration of device presence and unique device ID for ADM management + sync server plan status
+  async registerDevicePresence(subscription: UserSubscription): Promise<UserSubscription | null> {
     try {
       const devInfo = StorageService.getDeviceInfo();
       const deviceId = devInfo.deviceId;
@@ -248,29 +248,60 @@ export const ActivationService = {
         plan: planName,
         durationDays: subscription.durationDays || (subscription.isPro ? 30 : 0),
         activationId,
-        status: 'Ativo' as const,
+        status: subscription.isPro ? ('Ativo' as const) : ('Expirado' as const),
         expiresAt: subscription.expiresAt ? new Date(subscription.expiresAt).toISOString().slice(0, 10) : '2027-12-31',
         managedAssetsValue: userAssets,
         platform: devInfo.platform,
         resolution: devInfo.screenResolution,
       };
 
+      // 1. Post current presence to server
       await fetch('/api/subscription/subscribers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entry),
       });
 
+      // 2. Fetch server-recorded status to check if ADM modified or revoked/renewed plan on server
+      const statusRes = await fetch(`/api/subscription/device-status/${encodeURIComponent(deviceId)}`);
+      if (statusRes.ok) {
+        const data = await statusRes.json();
+        if (data.found && data.subscriber) {
+          const serverSub = data.subscriber;
+          // If ADM revoked Pro on server (plan is Gratuito or status is Expirado)
+          if ((serverSub.plan === 'Gratuito' || serverSub.status === 'Expirado') && subscription.isPro) {
+            const freeSub: UserSubscription = {
+              isPro: false,
+              planName: 'Plano Gratuito',
+              durationDays: 0,
+              expiresAt: 0,
+              deviceId,
+            };
+            StorageService.saveSubscription(freeSub);
+            return freeSub;
+          }
+          // If ADM granted or renewed Pro on server and local device is Free
+          if (serverSub.status === 'Ativo' && serverSub.plan !== 'Gratuito' && !subscription.isPro) {
+            const durationDays: 30 | 365 = serverSub.durationDays === 30 ? 30 : 365;
+            const proSub = this.buildSubscription(durationDays, serverSub.activationId || 'PRO-ADM-GRANTED');
+            proSub.planName = serverSub.plan || (durationDays === 30 ? 'Pro Mensal (30 Dias)' : 'Pro Anual (365 Dias)');
+            StorageService.saveSubscription(proSub);
+            return proSub;
+          }
+        }
+      }
+
+      // Update local storage cache of subscribers
       const saved = localStorage.getItem('finanbolso_admin_subscribers_v1');
       let subs: any[] = saved ? JSON.parse(saved) : [];
       const existingIdx = subs.findIndex((s: any) => s.deviceId === deviceId || s.id === deviceId);
       if (existingIdx >= 0) {
-        subs[existingIdx] = { ...subs[existingIdx], ...entry, plan: planName };
+        subs[existingIdx] = { ...subs[existingIdx], ...entry };
       } else {
         subs.unshift(entry);
       }
-
       localStorage.setItem('finanbolso_admin_subscribers_v1', JSON.stringify(subs));
     } catch {}
+    return null;
   }
 };

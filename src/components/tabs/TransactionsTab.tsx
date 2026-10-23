@@ -1,17 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { 
   Search, 
   Filter, 
   TrendingDown, 
   TrendingUp, 
-  ArrowUpDown, 
-  Calendar, 
   X, 
   Plus,
   Lock,
   Crown
 } from 'lucide-react';
-import { Transaction, Category, PAYMENT_METHOD_LABELS, PaymentMethod } from '../../types/finance';
+import { Transaction, Category, PAYMENT_METHOD_LABELS } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
 
 interface TransactionsTabProps {
@@ -24,7 +22,63 @@ interface TransactionsTabProps {
   onOpenSubscription?: () => void;
 }
 
-export const TransactionsTab: React.FC<TransactionsTabProps> = ({
+interface TransactionRowProps {
+  tx: Transaction;
+  categoryColor: string;
+  onSelect: (tx: Transaction) => void;
+}
+
+const MemoizedTransactionRow = memo<TransactionRowProps>(({ tx, categoryColor, onSelect }) => {
+  const isIncome = tx.type === 'income';
+
+  return (
+    <div
+      onClick={() => onSelect(tx)}
+      className="bg-slate-900/90 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer transition active:scale-[0.99] shadow-sm gpu-layer"
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <div
+          className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+            isIncome ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+          }`}
+        >
+          {isIncome ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-xs font-bold text-white truncate">{tx.description}</p>
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
+            <span
+              className="w-2 h-2 rounded-full inline-block shrink-0"
+              style={{ backgroundColor: categoryColor }}
+            />
+            <span className="truncate">{tx.category}</span>
+            <span>•</span>
+            <span>{formatDateBR(tx.date)}</span>
+          </div>
+          {tx.notes && (
+            <p className="text-[10px] text-slate-500 truncate mt-0.5 italic">
+              "{tx.notes}"
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="text-right shrink-0">
+        <p className={`text-sm font-extrabold tabular-nums ${isIncome ? 'text-emerald-400' : 'text-red-400'}`}>
+          {isIncome ? '+ ' : '- '}{formatBRL(tx.amount)}
+        </p>
+        <span className="text-[10px] font-medium text-slate-400 bg-slate-950 px-2 py-0.5 rounded-full border border-slate-800">
+          {PAYMENT_METHOD_LABELS[tx.paymentMethod]?.label || tx.paymentMethod}
+        </span>
+      </div>
+    </div>
+  );
+});
+
+MemoizedTransactionRow.displayName = 'MemoizedTransactionRow';
+
+export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
   transactions,
   categories,
   selectedMonth,
@@ -40,32 +94,14 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
   const [showFilters, setShowFilters] = useState(false);
 
-  // If not Pro, show locked screen
-  if (!isPro) {
-    return (
-      <div className="p-6 text-center bg-slate-900 border border-amber-500/30 rounded-3xl space-y-4 shadow-xl animate-in fade-in my-4">
-        <div className="w-16 h-16 rounded-3xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
-          <Lock className="w-8 h-8" />
-        </div>
-        <div>
-          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 inline-flex items-center gap-1">
-            <Crown className="w-3 h-3 text-amber-400" /> RECURSO PRO EXCLUSIVO
-          </span>
-          <h3 className="text-base font-extrabold text-white mt-2">Extrato Financeiro Completo</h3>
-          <p className="text-xs text-slate-300 max-w-sm mx-auto leading-relaxed mt-1">
-            A visualização consolidada, busca detalhada e filtros avançados do seu Extrato são exclusivos para membros do Clube Pro.
-          </p>
-        </div>
-        <button
-          onClick={onOpenSubscription}
-          className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-2xl shadow-xl transition active:scale-95 flex items-center justify-center gap-2 mx-auto"
-        >
-          <Crown className="w-4 h-4 text-slate-950" />
-          <span>Desbloquear Extrato com Clube Pro</span>
-        </button>
-      </div>
-    );
-  }
+  // Map category colors for instant lookup without .find inside iteration
+  const categoryColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (let i = 0; i < categories.length; i++) {
+      map[categories[i].name] = categories[i].color;
+    }
+    return map;
+  }, [categories]);
 
   // Month filter base
   const baseList = useMemo(() => {
@@ -105,16 +141,45 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   }, [baseList, searchTerm, typeFilter, categoryFilter, methodFilter, sortBy]);
 
   // Filtered totals
-  const totalFilteredIncome = filteredList
-    .filter(t => t.type === 'income')
-    .reduce((acc, t) => acc + t.amount, 0);
-
-  const totalFilteredExpense = filteredList
-    .filter(t => t.type === 'expense')
-    .reduce((acc, t) => acc + t.amount, 0);
+  const { totalFilteredIncome, totalFilteredExpense } = useMemo(() => {
+    let inc = 0;
+    let exp = 0;
+    for (let i = 0; i < filteredList.length; i++) {
+      if (filteredList[i].type === 'income') inc += filteredList[i].amount;
+      else exp += filteredList[i].amount;
+    }
+    return { totalFilteredIncome: inc, totalFilteredExpense: exp };
+  }, [filteredList]);
 
   // Distinct category list for dropdown
-  const distinctCategories = Array.from(new Set(baseList.map(t => t.category)));
+  const distinctCategories = useMemo(() => Array.from(new Set(baseList.map(t => t.category))), [baseList]);
+
+  // If not Pro, show locked screen
+  if (!isPro) {
+    return (
+      <div className="p-6 text-center bg-slate-900 border border-amber-500/30 rounded-3xl space-y-4 shadow-xl animate-in fade-in my-4">
+        <div className="w-16 h-16 rounded-3xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
+          <Lock className="w-8 h-8" />
+        </div>
+        <div>
+          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 inline-flex items-center gap-1">
+            <Crown className="w-3 h-3 text-amber-400" /> RECURSO PRO EXCLUSIVO
+          </span>
+          <h3 className="text-base font-extrabold text-white mt-2">Extrato Financeiro Completo</h3>
+          <p className="text-xs text-slate-300 max-w-sm mx-auto leading-relaxed mt-1">
+            A visualização consolidada, busca detalhada e filtros avançados do seu Extrato são exclusivos para membros do Clube Pro.
+          </p>
+        </div>
+        <button
+          onClick={onOpenSubscription}
+          className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-2xl shadow-xl transition active:scale-95 flex items-center justify-center gap-2 mx-auto"
+        >
+          <Crown className="w-4 h-4 text-slate-950" />
+          <span>Desbloquear Extrato com Clube Pro</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-24 animate-in fade-in">
@@ -259,10 +324,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         <span>{filteredList.length} registro(s) encontrado(s)</span>
         <div className="flex items-center gap-2">
           {totalFilteredIncome > 0 && (
-            <span className="text-emerald-400 font-semibold">+{formatBRL(totalFilteredIncome)}</span>
+            <span className="text-emerald-400 font-semibold tabular-nums">+{formatBRL(totalFilteredIncome)}</span>
           )}
           {totalFilteredExpense > 0 && (
-            <span className="text-red-400 font-semibold">-{formatBRL(totalFilteredExpense)}</span>
+            <span className="text-red-400 font-semibold tabular-nums">-{formatBRL(totalFilteredExpense)}</span>
           )}
         </div>
       </div>
@@ -283,57 +348,18 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredList.map((tx) => {
-            const isIncome = tx.type === 'income';
-            const cat = categories.find(c => c.name === tx.category);
-
-            return (
-              <div
-                key={tx.id}
-                onClick={() => onSelectTransaction(tx)}
-                className="bg-slate-900/90 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer transition active:scale-[0.99] shadow-sm"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
-                      isIncome ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
-                    }`}
-                  >
-                    {isIncome ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-white truncate">{tx.description}</p>
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
-                      <span
-                        className="w-2 h-2 rounded-full inline-block shrink-0"
-                        style={{ backgroundColor: cat ? cat.color : '#94a3b8' }}
-                      />
-                      <span className="truncate">{tx.category}</span>
-                      <span>•</span>
-                      <span>{formatDateBR(tx.date)}</span>
-                    </div>
-                    {tx.notes && (
-                      <p className="text-[10px] text-slate-500 truncate mt-0.5 italic">
-                        "{tx.notes}"
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="text-right shrink-0">
-                  <p className={`text-sm font-extrabold ${isIncome ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {isIncome ? '+ ' : '- '}{formatBRL(tx.amount)}
-                  </p>
-                  <span className="text-[10px] font-medium text-slate-400 bg-slate-950 px-2 py-0.5 rounded-full border border-slate-800">
-                    {PAYMENT_METHOD_LABELS[tx.paymentMethod]?.label || tx.paymentMethod}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+          {filteredList.map((tx) => (
+            <MemoizedTransactionRow
+              key={tx.id}
+              tx={tx}
+              categoryColor={categoryColorMap[tx.category] || '#94a3b8'}
+              onSelect={onSelectTransaction}
+            />
+          ))}
         </div>
       )}
     </div>
   );
-};
+});
+
+TransactionsTab.displayName = 'TransactionsTab';

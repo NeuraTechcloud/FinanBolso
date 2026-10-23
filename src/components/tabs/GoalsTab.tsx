@@ -34,7 +34,7 @@ interface GoalsTabProps {
   onAddTransaction?: (txData: Omit<Transaction, 'id' | 'createdAt'>) => void;
 }
 
-export const GoalsTab: React.FC<GoalsTabProps> = ({
+export const GoalsTab: React.FC<GoalsTabProps> = React.memo(({
   savingsGoals,
   categories,
   transactions,
@@ -1003,4 +1003,6 @@ export const GoalsTab: React.FC<GoalsTabProps> = ({
       )}
     </div>
   );
-};
+});
+
+GoalsTab.displayName = 'GoalsTab';

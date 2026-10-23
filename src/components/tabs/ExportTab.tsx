@@ -26,7 +26,7 @@ interface ExportTabProps {
   onRefreshData: () => void;
 }
 
-export const ExportTab: React.FC<ExportTabProps> = ({
+export const ExportTab: React.FC<ExportTabProps> = React.memo(({
   transactions,
   categories,
   savingsGoals,
@@ -367,4 +367,6 @@ export const ExportTab: React.FC<ExportTabProps> = ({
       )}
     </div>
   );
-};
+});
+
+ExportTab.displayName = 'ExportTab';

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -31,7 +31,57 @@ interface HomeTabProps {
   onQuickAddPreset: (preset: QuickPreset) => void;
 }
 
-export const HomeTab: React.FC<HomeTabProps> = ({
+interface RecentTxRowProps {
+  tx: Transaction;
+  categoryColor: string;
+  onSelect: (tx: Transaction) => void;
+}
+
+const MemoizedRecentTxRow = memo<RecentTxRowProps>(({ tx, categoryColor, onSelect }) => {
+  const isIncome = tx.type === 'income';
+
+  return (
+    <div
+      onClick={() => onSelect(tx)}
+      className="py-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 rounded-xl px-2 -mx-2 transition cursor-pointer gpu-layer"
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <div 
+          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+            isIncome ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+          }`}
+        >
+          {isIncome ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-white truncate">{tx.description}</p>
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+            <span 
+              className="w-1.5 h-1.5 rounded-full inline-block"
+              style={{ backgroundColor: categoryColor }}
+            />
+            <span className="truncate">{tx.category}</span>
+            <span>•</span>
+            <span>{formatDateBR(tx.date)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="text-right shrink-0">
+        <p className={`text-xs font-bold tabular-nums ${isIncome ? 'text-emerald-400' : 'text-red-400'}`}>
+          {isIncome ? '+ ' : '- '}{formatBRL(tx.amount)}
+        </p>
+        <span className="text-[10px] text-slate-500">
+          {PAYMENT_METHOD_LABELS[tx.paymentMethod]?.label || tx.paymentMethod}
+        </span>
+      </div>
+    </div>
+  );
+});
+
+MemoizedRecentTxRow.displayName = 'MemoizedRecentTxRow';
+
+export const HomeTab: React.FC<HomeTabProps> = memo(({
   transactions,
   categories,
   selectedMonth,
@@ -42,6 +92,15 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   onGoToTab,
   onQuickAddPreset,
 }) => {
+  // Category color lookup map
+  const categoryColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (let i = 0; i < categories.length; i++) {
+      map[categories[i].name] = categories[i].color;
+    }
+    return map;
+  }, [categories]);
+
   // Memoized month transactions
   const monthTransactions = useMemo(() => {
     return selectedMonth === 'all'
@@ -64,13 +123,12 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   }, [monthTransactions]);
 
   // Calculate total monthly budget configured on expense categories
-  const { totalBudgetLimit, budgetUsagePercent } = useMemo(() => {
+  const { totalBudgetLimit } = useMemo(() => {
     const limit = categories
       .filter(c => c.type === 'expense' && c.monthlyBudget)
       .reduce((acc, c) => acc + (c.monthlyBudget || 0), 0);
-    const usage = limit > 0 ? Math.min(100, Math.round((expenseTotal / limit) * 100)) : 0;
-    return { totalBudgetLimit: limit, budgetUsagePercent: usage };
-  }, [categories, expenseTotal]);
+    return { totalBudgetLimit: limit };
+  }, [categories]);
 
   // Top spending categories in current month
   const sortedCategories = useMemo(() => {
@@ -79,11 +137,10 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       const t = monthTransactions[i];
       if (t.type === 'expense') {
         if (!expenseByCategory[t.category]) {
-          const cat = categories.find(c => c.name === t.category);
           expenseByCategory[t.category] = { 
             total: 0, 
             count: 0, 
-            color: cat ? cat.color : '#f59e0b' 
+            color: categoryColorMap[t.category] || '#f59e0b' 
           };
         }
         expenseByCategory[t.category].total += t.amount;
@@ -93,7 +150,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     return Object.entries(expenseByCategory)
       .sort((a, b) => b[1].total - a[1].total)
       .slice(0, 4);
-  }, [monthTransactions, categories]);
+  }, [monthTransactions, categoryColorMap]);
 
   // Recent transactions
   const recentTransactions = useMemo(() => {
@@ -119,7 +176,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
 
         <div className="flex items-baseline gap-2 mb-4">
-          <span className={`text-2xl sm:text-3xl font-extrabold tracking-tight ${netBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
+          <span className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums ${netBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
             {formatBRL(netBalance)}
           </span>
         </div>
@@ -132,7 +189,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </div>
             <div className="min-w-0">
               <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Receitas</p>
-              <p className="text-sm font-bold text-emerald-400 truncate">{formatBRL(incomeTotal)}</p>
+              <p className="text-sm font-bold text-emerald-400 truncate tabular-nums">{formatBRL(incomeTotal)}</p>
             </div>
           </div>
 
@@ -142,7 +199,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </div>
             <div className="min-w-0">
               <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Despesas</p>
-              <p className="text-sm font-bold text-red-400 truncate">{formatBRL(expenseTotal)}</p>
+              <p className="text-sm font-bold text-red-400 truncate tabular-nums">{formatBRL(expenseTotal)}</p>
             </div>
           </div>
         </div>
@@ -210,7 +267,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             >
               <span className="font-medium">{preset.title}</span>
               {preset.defaultAmount && (
-                <span className={`text-[11px] font-bold ${preset.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
+                <span className={`text-[11px] font-bold tabular-nums ${preset.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
                   {formatBRL(preset.defaultAmount)}
                 </span>
               )}
@@ -273,7 +330,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
               Teto de Gastos Planejado
             </span>
-            <span className="font-medium text-slate-400">
+            <span className="font-medium text-slate-400 tabular-nums">
               {formatBRL(expenseTotal)} / {formatBRL(totalBudgetLimit)}
             </span>
           </div>
@@ -284,7 +341,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               className={`h-full rounded-full transition-all duration-500 ${
                 expenseTotal > totalBudgetLimit 
                   ? 'bg-red-500' 
-                  : budgetUsagePercent > 80 
+                  : ((expenseTotal / totalBudgetLimit) * 100) > 80 
                     ? 'bg-amber-400' 
                     : 'bg-emerald-500'
               }`}
@@ -293,7 +350,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           </div>
 
           <div className="flex items-center justify-between mt-2 text-[11px]">
-            <span className={`${expenseTotal > totalBudgetLimit ? 'text-red-400 font-semibold' : 'text-slate-400'}`}>
+            <span className={`tabular-nums ${expenseTotal > totalBudgetLimit ? 'text-red-400 font-semibold' : 'text-slate-400'}`}>
               {expenseTotal > totalBudgetLimit 
                 ? `Excedido em ${formatBRL(expenseTotal - totalBudgetLimit)}`
                 : `Resta gastar: ${formatBRL(totalBudgetLimit - expenseTotal)}`
@@ -335,8 +392,8 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                       {catName}
                     </span>
                     <div className="text-right">
-                      <span className="font-semibold text-white">{formatBRL(stats.total)}</span>
-                      <span className="text-[10px] text-slate-400 ml-1.5">({pct}%)</span>
+                      <span className="font-semibold text-white tabular-nums">{formatBRL(stats.total)}</span>
+                      <span className="text-[10px] text-slate-400 ml-1.5 tabular-nums">({pct}%)</span>
                     </div>
                   </div>
                   <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
@@ -378,52 +435,19 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           </div>
         ) : (
           <div className="divide-y divide-slate-800/60">
-            {recentTransactions.map((tx) => {
-              const isIncome = tx.type === 'income';
-              const cat = categories.find(c => c.name === tx.category);
-
-              return (
-                <div
-                  key={tx.id}
-                  onClick={() => onSelectTransaction(tx)}
-                  className="py-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 rounded-xl px-2 -mx-2 transition cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div 
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                        isIncome ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
-                      }`}
-                    >
-                      {isIncome ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-white truncate">{tx.description}</p>
-                      <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                        <span 
-                          className="w-1.5 h-1.5 rounded-full inline-block"
-                          style={{ backgroundColor: cat ? cat.color : '#94a3b8' }}
-                        />
-                        <span className="truncate">{tx.category}</span>
-                        <span>•</span>
-                        <span>{formatDateBR(tx.date)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <p className={`text-xs font-bold ${isIncome ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {isIncome ? '+ ' : '- '}{formatBRL(tx.amount)}
-                    </p>
-                    <span className="text-[10px] text-slate-500">
-                      {PAYMENT_METHOD_LABELS[tx.paymentMethod]?.label || tx.paymentMethod}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+            {recentTransactions.map((tx) => (
+              <MemoizedRecentTxRow
+                key={tx.id}
+                tx={tx}
+                categoryColor={categoryColorMap[tx.category] || '#94a3b8'}
+                onSelect={onSelectTransaction}
+              />
+            ))}
           </div>
         )}
       </div>
     </div>
   );
-};
+});
+
+HomeTab.displayName = 'HomeTab';

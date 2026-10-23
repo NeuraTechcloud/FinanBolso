@@ -267,7 +267,8 @@ function loadPersistentSubscribers(): Map<string, any> {
       if (Array.isArray(arr)) {
         arr.forEach(item => {
           if (item && (item.id || item.deviceId)) {
-            map.set(item.deviceId || item.id, item);
+            const key = item.deviceId || item.id;
+            map.set(key, item);
           }
         });
       }
@@ -281,7 +282,9 @@ function savePersistentSubscribers(map: Map<string, any>) {
   try {
     const arr = Array.from(map.values());
     fs.writeFileSync(DB_FILE, JSON.stringify(arr, null, 2), 'utf-8');
-  } catch {}
+  } catch (err) {
+    console.error('Erro ao salvar banco de assinantes:', err);
+  }
 }
 
 const globalSubscribers = loadPersistentSubscribers();
@@ -289,6 +292,16 @@ const globalSubscribers = loadPersistentSubscribers();
 // API Endpoints for Global Subscribers Sync
 app.get('/api/subscription/subscribers', (_req, res) => {
   return res.json(Array.from(globalSubscribers.values()));
+});
+
+// Single device status lookup endpoint for instant client synchronization
+app.get('/api/subscription/device-status/:deviceId', (req, res) => {
+  const { deviceId } = req.params;
+  const sub = globalSubscribers.get(deviceId);
+  if (sub) {
+    return res.json({ found: true, subscriber: sub });
+  }
+  return res.json({ found: false });
 });
 
 app.post('/api/subscription/subscribers', (req, res) => {
@@ -351,6 +364,129 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
   } catch (error) {
     console.error('Webhook error:', error);
     return res.status(500).send('Error processing webhook');
+  }
+});
+
+// ------------------------------------------------------------------
+// 5. AI Financial Tips & Suggestions Endpoint (Gemini @google/genai)
+// ------------------------------------------------------------------
+import { GoogleGenAI, Type } from '@google/genai';
+
+let aiClient: GoogleGenAI | null = null;
+if (process.env.GEMINI_API_KEY) {
+  aiClient = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+}
+
+app.post('/api/ai/financial-tips', async (req, res) => {
+  try {
+    const { incomeTotal, expenseTotal, monthTransactions, categories } = req.body;
+
+    if (process.env.GEMINI_API_KEY) {
+      const client = aiClient || new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+      });
+
+      const prompt = `Analise os dados financeiros mensais do usuário e forneça 3 a 4 dicas práticas e realistas em português do Brasil para ele economizar dinheiro neste mês:
+- Receitas totais: R$ ${Number(incomeTotal || 0).toFixed(2)}
+- Despesas totais: R$ ${Number(expenseTotal || 0).toFixed(2)}
+- Lançamentos do mês: ${JSON.stringify((monthTransactions || []).slice(0, 15))}
+- Categorias cadastradas: ${JSON.stringify((categories || []).map((c: any) => ({ name: c.name, budget: c.monthlyBudget })))}
+
+Retorne um objeto JSON contendo:
+1. "summaryText": um resumo motivacional curto do desempenho financeiro do mês e potencial de economia total estimado em R$.
+2. "tips": lista com 3 ou 4 dicas específicas. Cada dica deve ter:
+   - "title": título curto da dica (ex: "Reduzir Gastos com Delivery", "Otimizar Transporte", "Ajustar Assinaturas")
+   - "category": uma categoria ("Economia", "Oportunidade", "Alerta", "Meta")
+   - "description": explicação clara de 2-3 frases orientando a ação.
+   - "estimatedMonthlySavings": valor estimado em R$ de economia mensal que o usuário conseguirá se aplicar a dica (número positivo).
+   - "impact": "Alto", "Médio" ou "Baixo"`;
+
+      const geminiRes = await client.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              summaryText: { type: Type.STRING },
+              tips: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    category: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    estimatedMonthlySavings: { type: Type.NUMBER },
+                    impact: { type: Type.STRING },
+                  },
+                  required: ['title', 'category', 'description', 'estimatedMonthlySavings', 'impact'],
+                },
+              },
+            },
+            required: ['summaryText', 'tips'],
+          },
+        },
+      });
+
+      if (geminiRes.text) {
+        const parsed = JSON.parse(geminiRes.text.trim());
+        return res.json({ success: true, source: 'ai', ...parsed });
+      }
+    }
+
+    // Fallback Smart Rule-Based Engine if no key or offline
+    const exp = Number(expenseTotal || 0);
+    const inc = Number(incomeTotal || 0);
+    const net = inc - exp;
+    const estSavings = Math.max(50, Math.round(exp * 0.12));
+
+    const fallbackTips = [
+      {
+        title: 'Otimização de Gastos do Mês',
+        category: 'Economia',
+        description: `Seus gastos no período somam ${exp > 0 ? 'R$ ' + exp.toFixed(2) : 'R$ 0,00'}. Revisando pequenas despesas não essenciais, é possível economizar cerca de 12% do seu orçamento mensal sem reduzir seu conforto.`,
+        estimatedMonthlySavings: estSavings,
+        impact: 'Alto',
+      },
+      {
+        title: 'Retenção para Reserva de Emergência',
+        category: 'Meta',
+        description: inc > 0 
+          ? `Sua receita do mês é de R$ ${inc.toFixed(2)}. Separar 15% (R$ ${(inc * 0.15).toFixed(2)}) logo no primeiro dia garante o crescimento consistente do seu patrimônio.`
+          : 'Cadastre suas receitas mensais para calcularmos a meta de retenção ideal para sua reserva de emergência.',
+        estimatedMonthlySavings: Math.round(inc * 0.15) || 150,
+        impact: 'Médio',
+      },
+      {
+        title: 'Tetos por Categoria',
+        category: 'Oportunidade',
+        description: 'Defina limites orçamentários para suas duas maiores categorias de gastos para eliminar vazamentos silenciosos de dinheiro.',
+        estimatedMonthlySavings: 80,
+        impact: 'Médio',
+      },
+    ];
+
+    return res.json({
+      success: true,
+      source: 'rule-engine',
+      summaryText: net >= 0 
+        ? `Seu saldo está positivo em R$ ${net.toFixed(2)}. Aplicando as sugestões de IA abaixo, você pode economizar mais R$ ${estSavings + 80},00 este mês!`
+        : `Seu orçamento está com déficit de R$ ${Math.abs(net).toFixed(2)}. As sugestões da IA ajudarão a reequilibrar suas finanças imediatamente.`,
+      tips: fallbackTips,
+    });
+  } catch (error) {
+    console.error('Error generating AI financial tips:', error);
+    return res.status(500).json({ success: false, error: 'Falha ao gerar dicas financeiras' });
   }
 });
 
