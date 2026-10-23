@@ -1,0 +1,6 @@
+{
+  "name": "FinanBolso - Controle Financeiro Pessoal",
+  "description": "Aplicativo móvel completo para celular de controle financeiro com gráficos detalhados de gastos mensais, salvamento offline no próprio celular e exportação de dados para Excel e PDF.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

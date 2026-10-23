@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="coinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  
+  <!-- Subtle circular rings -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#ffffff" stroke-width="4" opacity="0.15"/>
+  <circle cx="256" cy="256" r="220" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.08"/>
+
+  <!-- Wallet / Card / Vault Icon combination -->
+  <g filter="url(#shadow)">
+    <!-- Main Card Body -->
+    <rect x="110" y="160" width="292" height="192" rx="28" fill="#0f172a"/>
+    <rect x="110" y="210" width="292" height="40" fill="#1e293b"/>
+    
+    <!-- Growth Graph Line accent inside card -->
+    <path d="M 140 310 L 200 275 L 260 290 L 330 230 L 372 245" fill="none" stroke="#10b981" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="372" cy="245" r="7" fill="#34d399"/>
+
+    <!-- Shiny Emblem Coin -->
+    <circle cx="320" cy="180" r="44" fill="url(#coinGrad)" stroke="#ffffff" stroke-width="3"/>
+    <text x="320" y="194" font-family="system-ui, -apple-system, sans-serif" font-size="38" font-weight="900" fill="#78350f" text-anchor="middle">R$</text>
+  </g>
+</svg>
