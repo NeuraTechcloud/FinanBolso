@@ -341,21 +341,6 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                     <span>Vencimento: <strong>{formatDateBR(new Date(subscription.expiresAt).toISOString().slice(0, 10))}</strong></span>
                     <span>Duração: <strong>{subscription.durationDays || 365} dias</strong></span>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onResetSubscription) {
-                        onResetSubscription();
-                        setSuccessMsg('✓ Plano Pro removido. Aparelho redefinido para o Gratuito.');
-                        setTimeout(() => setSuccessMsg(null), 2500);
-                      }
-                    }}
-                    className="w-full mt-1.5 py-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 active:scale-95"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Remover Plano Pro / Voltar ao Gratuito</span>
-                  </button>
                 </div>
               )}
 

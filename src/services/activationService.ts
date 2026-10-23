@@ -64,6 +64,16 @@ export const ActivationService = {
     }
   },
 
+  // Delete an unused key from the authorized pool
+  deleteAuthorizedKey(keyToDelete: string): void {
+    const keys = this.getAuthorizedKeys();
+    const cleanKey = keyToDelete.trim().toUpperCase();
+    const filtered = keys.filter(k => k.key.toUpperCase() !== cleanKey);
+    try {
+      localStorage.setItem(STORAGE_AUTHORIZED_KEYS, JSON.stringify(filtered));
+    } catch {}
+  },
+
   // Generate a distinct Activation ID for 30 or 365 days and register it
   generateActivationId(durationDays: 30 | 365, label?: string): string {
     const prefix = durationDays === 30 ? 'PRO-30D' : 'PRO-365D';

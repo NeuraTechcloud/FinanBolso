@@ -189,6 +189,12 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
     setTimeout(() => setCopiedKey(null), 3000);
   };
 
+  const handleDeleteGeneratedKey = (keyToDelete: string) => {
+    setGeneratedKeys(generatedKeys.filter(k => k.key !== keyToDelete));
+    ActivationService.deleteAuthorizedKey(keyToDelete);
+    showMsg(`✓ Chave ${keyToDelete} excluída com sucesso.`);
+  };
+
   const handleAddSubscriber = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubName.trim()) return;
@@ -702,28 +708,39 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                           <div className="text-[10px] text-slate-500">Emitido: {k.createdAt}</div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(k.key);
-                            setCopiedKey(k.key);
-                            showMsg(`Chave ${k.key} copiada!`);
-                            setTimeout(() => setCopiedKey(null), 2500);
-                          }}
-                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 active:scale-95"
-                        >
-                          {copiedKey === k.key ? (
-                            <>
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                              <span>Copiado</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" />
-                              <span>Copiar</span>
-                            </>
-                          )}
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(k.key);
+                              setCopiedKey(k.key);
+                              showMsg(`Chave ${k.key} copiada!`);
+                              setTimeout(() => setCopiedKey(null), 2500);
+                            }}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 active:scale-95"
+                          >
+                            {copiedKey === k.key ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Copiado</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copiar</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteGeneratedKey(k.key)}
+                            title="Excluir Chave Não Utilizada"
+                            className="p-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
