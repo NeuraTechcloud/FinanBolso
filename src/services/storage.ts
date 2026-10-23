@@ -264,6 +264,89 @@ function generateInitialDemoData(): Transaction[] {
   return list;
 }
 
+// Deterministic Hardware Fingerprint Generator (stable across Incognito mode & cache clear on same device)
+function computeHardwareFingerprint(): string {
+  try {
+    const parts: string[] = [];
+
+    // 1. User Agent & Navigator Traits
+    if (typeof navigator !== 'undefined') {
+      parts.push(navigator.userAgent || '');
+      parts.push(navigator.language || '');
+      parts.push(String(navigator.hardwareConcurrency || ''));
+      parts.push(String((navigator as any).deviceMemory || ''));
+    }
+
+    // 2. Screen Dimensions & Color Depth
+    if (typeof window !== 'undefined' && window.screen) {
+      parts.push(`${window.screen.width}x${window.screen.height}`);
+      parts.push(`${window.screen.colorDepth}`);
+      parts.push(`${window.devicePixelRatio || 1}`);
+    }
+
+    // 3. Timezone
+    try {
+      parts.push(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
+    } catch {}
+
+    // 4. HTML5 Offscreen Canvas Rendering Hash
+    if (typeof document !== 'undefined') {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 200;
+        canvas.height = 50;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.textBaseline = 'top';
+          ctx.font = "14px 'Arial'";
+          ctx.textBaseline = 'alphabetic';
+          ctx.fillStyle = '#f60';
+          ctx.fillRect(125, 1, 62, 20);
+          ctx.fillStyle = '#069';
+          ctx.fillText('FinanBolso-HW-ID-v1', 2, 15);
+          ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+          ctx.fillText('FinanBolso-HW-ID-v1', 4, 17);
+          parts.push(canvas.toDataURL());
+        }
+      } catch {}
+
+      // 5. WebGL GPU Vendor / Renderer Info
+      try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (gl) {
+          const debugInfo = (gl as any).getExtension('WEBGL_debug_renderer_info');
+          if (debugInfo) {
+            const vendor = (gl as any).getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+            const renderer = (gl as any).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+            parts.push(`${vendor}~${renderer}`);
+          }
+        }
+      } catch {}
+    }
+
+    const rawString = parts.join('||');
+
+    // FNV-1a Hash Algorithm to generate two 16-bit equivalent alphanumeric segments
+    let hash1 = 2166136261;
+    let hash2 = 305419896;
+    for (let i = 0; i < rawString.length; i++) {
+      const code = rawString.charCodeAt(i);
+      hash1 ^= code;
+      hash1 = Math.imul(hash1, 16777619);
+      hash2 ^= code;
+      hash2 = Math.imul(hash2, 1099511628211 % 4294967296);
+    }
+
+    const seg1 = (hash1 >>> 0).toString(36).toUpperCase().padStart(4, 'X').slice(-4);
+    const seg2 = (hash2 >>> 0).toString(36).toUpperCase().padStart(4, 'Y').slice(-4);
+
+    return `DEV-BR-${seg1}-${seg2}`;
+  } catch {
+    return 'DEV-BR-UNQ1-8842';
+  }
+}
+
 export const StorageService = {
   getTransactions(): Transaction[] {
     try {
@@ -387,26 +470,34 @@ export const StorageService = {
     this.saveReminders([]);
   },
 
-  // Unique Device Identifier (Hardware & Browser binding)
+  // Unique Device Identifier (Hardware Fingerprint & Browser binding)
   getDeviceId(): string {
     try {
+      // 1. Try localStorage
       let id = localStorage.getItem('finanbolso_device_id_v2');
-      if (!id) {
-        // Upgrade from legacy key or generate a unique persistent hardware format
-        const legacy = localStorage.getItem('finanbolso_device_id');
-        if (legacy && legacy.startsWith('DEV-BR-')) {
-          id = legacy;
-        } else {
-          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-          const rand = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-          id = `DEV-BR-${rand()}-${rand()}`;
+      if (id && id.startsWith('DEV-BR-')) return id;
+
+      // 2. Try sessionStorage fallback
+      try {
+        id = sessionStorage.getItem('finanbolso_device_id_v2');
+        if (id && id.startsWith('DEV-BR-')) {
+          localStorage.setItem('finanbolso_device_id_v2', id);
+          return id;
         }
-        localStorage.setItem('finanbolso_device_id_v2', id);
-        localStorage.setItem('finanbolso_device_id', id);
-      }
-      return id;
+      } catch {}
+
+      // 3. Compute deterministic hardware fingerprint (stable across Incognito & cache clear)
+      const fpId = computeHardwareFingerprint();
+
+      try {
+        localStorage.setItem('finanbolso_device_id_v2', fpId);
+        localStorage.setItem('finanbolso_device_id', fpId);
+        sessionStorage.setItem('finanbolso_device_id_v2', fpId);
+      } catch {}
+
+      return fpId;
     } catch {
-      return 'DEV-BR-LOCAL-0001';
+      return computeHardwareFingerprint();
     }
   },
 
