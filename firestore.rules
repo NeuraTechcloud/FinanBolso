@@ -1,0 +1,197 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // -------------------------------------------------------------------------
+    // GLOBAL HELPERS
+    // -------------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == "bodygmr30@gmail.com"
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // -------------------------------------------------------------------------
+    // ENTITY VALIDATIONS
+    // -------------------------------------------------------------------------
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'lastLogin', 'updatedAt', 'subscription']) &&
+             data.uid is string &&
+             data.email is string;
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['id', 'type', 'amount', 'description', 'category', 'date', 'paymentMethod', 'createdAt']) &&
+             data.keys().hasOnly(['id', 'type', 'amount', 'description', 'category', 'date', 'paymentMethod', 'notes', 'isRecurring', 'createdAt', 'updatedAt']) &&
+             data.id is string &&
+             data.type in ['expense', 'income'] &&
+             data.amount is number &&
+             data.description is string && data.description.size() <= 200 &&
+             data.category is string &&
+             data.date is string && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             data.paymentMethod is string &&
+             (data.get('notes', '') is string && data.get('notes', '').size() <= 500) &&
+             data.createdAt is number;
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['id', 'name', 'type', 'color', 'icon']) &&
+             data.keys().hasOnly(['id', 'name', 'type', 'color', 'icon', 'monthlyBudget']) &&
+             data.id is string &&
+             data.name is string && data.name.size() <= 50 &&
+             data.type in ['expense', 'income'] &&
+             data.color is string && data.color.matches('^#[0-9a-fA-F]{6}$') &&
+             data.icon is string;
+    }
+
+    function isValidSavingsGoal(data) {
+      return data.keys().hasAll(['id', 'title', 'targetAmount', 'currentAmount', 'color', 'icon']) &&
+             data.keys().hasOnly(['id', 'title', 'targetAmount', 'currentAmount', 'deadline', 'color', 'icon']) &&
+             data.id is string &&
+             data.title is string && data.title.size() <= 100 &&
+             data.targetAmount is number &&
+             data.currentAmount is number &&
+             (data.get('deadline', '2000-01-01') is string && data.get('deadline', '2000-01-01').matches('^\\d{4}-\\d{2}-\\d{2}$')) &&
+             data.color is string && data.color.matches('^#[0-9a-fA-F]{6}$') &&
+             data.icon is string;
+    }
+
+    function isValidReminder(data) {
+      return data.keys().hasAll(['id', 'title', 'amount', 'dueDate', 'category', 'isPaid']) &&
+             data.keys().hasOnly(['id', 'title', 'amount', 'dueDate', 'category', 'isPaid', 'paymentMethod', 'notes']) &&
+             data.id is string &&
+             data.title is string && data.title.size() <= 100 &&
+             data.amount is number &&
+             data.dueDate is string && data.dueDate.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             data.category is string &&
+             data.isPaid is bool;
+    }
+
+    function isValidDevice(data) {
+      return data.keys().hasAll(['id', 'deviceId', 'name', 'plan', 'status', 'expiresAt']) &&
+             data.keys().hasOnly(['id', 'deviceId', 'name', 'email', 'plan', 'durationDays', 'activationId', 'status', 'expiresAt', 'managedAssetsValue', 'platform', 'resolution', 'userId', 'lastSeen']) &&
+             data.id is string &&
+             data.deviceId is string &&
+             data.name is string &&
+             data.plan is string &&
+             data.status in ['Ativo', 'Expirado'] &&
+             data.expiresAt is string;
+    }
+
+    function isValidActivation(data) {
+      return data.keys().hasAll(['key', 'durationDays', 'issuedAt']) &&
+             data.keys().hasOnly(['key', 'durationDays', 'issuedAt', 'label', 'usedBy', 'usedAt']) &&
+             data.key is string &&
+             data.durationDays in [30, 365] &&
+             data.issuedAt is number;
+    }
+
+    // -------------------------------------------------------------------------
+    // MATCH BLOCKS
+    // -------------------------------------------------------------------------
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Admins collection
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // User data
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming());
+      allow delete: if isAdmin();
+
+      match /transactions/{transactionId} {
+        allow read, list: if isOwner(userId) || isAdmin();
+        allow create: if (isOwner(userId) || isAdmin()) && isValidTransaction(incoming());
+        allow update: if (isOwner(userId) || isAdmin()) && isValidTransaction(incoming());
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /categories/{categoryId} {
+        allow read, list: if isOwner(userId) || isAdmin();
+        allow create: if (isOwner(userId) || isAdmin()) && isValidCategory(incoming());
+        allow update: if (isOwner(userId) || isAdmin()) && isValidCategory(incoming());
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /savingsGoals/{goalId} {
+        allow read, list: if isOwner(userId) || isAdmin();
+        allow create: if (isOwner(userId) || isAdmin()) && isValidSavingsGoal(incoming());
+        allow update: if (isOwner(userId) || isAdmin()) && isValidSavingsGoal(incoming());
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /reminders/{reminderId} {
+        allow read, list: if isOwner(userId) || isAdmin();
+        allow create: if (isOwner(userId) || isAdmin()) && isValidReminder(incoming());
+        allow update: if (isOwner(userId) || isAdmin()) && isValidReminder(incoming());
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Device registry
+    match /devices/{deviceId} {
+      // Allow read (get) if admin, or if the user is the owner, or if anonymous (to allow initial device sync)
+      // 'list' is strictly restricted to admins.
+      allow get: if true; 
+      allow list: if isAdmin();
+      
+      // Allow creation and updates for device tracking
+      // If signed in, only the owner can update their device entry.
+      // If not signed in, anyone can update if they know the deviceId (legacy device-only mode).
+      allow create: if isValidDevice(incoming()) && (incoming().deviceId == deviceId || isAdmin());
+      allow update: if isAdmin() || (
+        isValidDevice(incoming()) && 
+        incoming().deviceId == deviceId && 
+        (existing().userId == null || existing().userId == request.auth.uid || !isSignedIn())
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    // Activation keys
+    match /activations/{activationKey} {
+      allow read: if true; // Allow anyone to check if a key is valid (get)
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidActivation(incoming());
+      
+      // Allow users to "use" a key (update usedBy/usedAt)
+      allow update: if isAdmin() || (
+        isValidActivation(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['usedBy', 'usedAt', 'updatedAt'])
+      );
+      
+      allow delete: if isAdmin();
+    }
+  }
+}

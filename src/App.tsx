@@ -17,8 +17,11 @@ import { Wifi, Battery, Signal, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatBRL } from './services/exportService';
 import { TransactionEffectOverlay, EffectType } from './components/TransactionEffectOverlay';
+import { FirebaseProvider, useFirebase } from './contexts/FirebaseContext';
+import { FirestoreService } from './services/firestore';
 
-export default function App() {
+function AppContent() {
+  const { user, signIn, logout, isSyncing } = useFirebase();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
@@ -66,11 +69,20 @@ export default function App() {
   // Load from local offline storage on mount & force device registration + dismiss splash preloader smoothly
   useEffect(() => {
     loadData();
-    ActivationService.registerDevicePresence(subscription).then((updatedSub) => {
-      if (updatedSub) {
-        setSubscription(updatedSub);
+    
+    // Register device presence - handle async logic carefully
+    const initDevice = async () => {
+      try {
+        const updatedSub = await ActivationService.registerDevicePresence(subscription);
+        if (updatedSub) {
+          setSubscription(updatedSub);
+        }
+      } catch (err) {
+        console.error('Device registration failed:', err);
       }
-    });
+    };
+
+    initDevice();
 
     // Smooth fade-out transition for the HTML splash preloader
     const splash = document.getElementById('app-splash');
@@ -83,7 +95,41 @@ export default function App() {
         return () => clearTimeout(timer);
       });
     }
-  }, [subscription]);
+  }, [subscription, user]);
+
+  // Firestore Real-time Sync
+  useEffect(() => {
+    if (!user) return;
+
+    // Use a single cleanup for all listeners to ensure zero memory leaks
+    const unsubs: Array<() => void> = [];
+
+    unsubs.push(FirestoreService.subscribeTransactions(user.uid, (txs) => {
+      setTransactions(txs.sort((a, b) => b.createdAt - a.createdAt));
+      StorageService.saveTransactions(txs);
+    }));
+
+    unsubs.push(FirestoreService.subscribeCategories(user.uid, (cats) => {
+      if (cats.length > 0) {
+        setCategories(cats);
+        StorageService.saveCategories(cats);
+      }
+    }));
+
+    unsubs.push(FirestoreService.subscribeGoals(user.uid, (goals) => {
+      setSavingsGoals(goals);
+      StorageService.saveSavingsGoals(goals);
+    }));
+
+    unsubs.push(FirestoreService.subscribeReminders(user.uid, (rems) => {
+      setReminders(rems);
+      StorageService.saveReminders(rems);
+    }));
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
+  }, [user]);
 
   const loadData = useCallback(() => {
     const loadedTx = StorageService.getTransactions();
@@ -101,21 +147,21 @@ export default function App() {
     txData: Omit<Transaction, 'id' | 'createdAt'>,
     existingId?: string
   ) => {
-    let updated: Transaction[];
+    let newTx: Transaction;
     if (existingId) {
-      updated = transactions.map(t => 
-        t.id === existingId 
-          ? { ...t, ...txData }
-          : t
-      );
+      const existing = transactions.find(t => t.id === existingId);
+      newTx = { 
+        ...existing!,
+        ...txData,
+        updatedAt: Date.now()
+      };
       showToast('Lançamento atualizado com sucesso!');
     } else {
-      const newTx: Transaction = {
+      newTx = {
         ...txData,
         id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         createdAt: Date.now(),
       };
-      updated = [newTx, ...transactions];
       setActiveEffect({
         type: txData.type,
         amount: txData.amount,
@@ -123,10 +169,18 @@ export default function App() {
       });
       showToast(`${txData.type === 'income' ? 'Receita' : 'Despesa'} de ${formatBRL(txData.amount)} salva!`);
     }
-    setTransactions(updated);
-    StorageService.saveTransactions(updated);
+
+    if (user) {
+      FirestoreService.saveTransaction(user.uid, newTx);
+    } else {
+      const updated = existingId 
+        ? transactions.map(t => t.id === existingId ? newTx : t)
+        : [newTx, ...transactions];
+      setTransactions(updated);
+      StorageService.saveTransactions(updated);
+    }
     setEditingTransaction(null);
-  }, [transactions, showToast]);
+  }, [transactions, showToast, user]);
 
   // Quick 1-Tap Preset Addition
   const handleQuickAddPreset = useCallback((preset: QuickPreset) => {
@@ -142,66 +196,102 @@ export default function App() {
       paymentMethod: preset.paymentMethod,
       createdAt: Date.now(),
     };
-    const updated = [newTx, ...transactions];
-    setTransactions(updated);
-    StorageService.saveTransactions(updated);
+
+    if (user) {
+      FirestoreService.saveTransaction(user.uid, newTx);
+    } else {
+      const updated = [newTx, ...transactions];
+      setTransactions(updated);
+      StorageService.saveTransactions(updated);
+    }
+
     setActiveEffect({
       type: preset.type,
       amount: newTx.amount,
       description: preset.title,
     });
     showToast(`✓ ${preset.title} (${formatBRL(newTx.amount)}) lançado no celular!`);
-  }, [transactions, showToast]);
+  }, [transactions, showToast, user]);
 
   // Delete transaction
   const handleDeleteTransaction = useCallback((id: string) => {
-    const updated = transactions.filter(t => t.id !== id);
-    setTransactions(updated);
-    StorageService.saveTransactions(updated);
+    if (user) {
+      FirestoreService.deleteTransaction(user.uid, id);
+    } else {
+      const updated = transactions.filter(t => t.id !== id);
+      setTransactions(updated);
+      StorageService.saveTransactions(updated);
+    }
     setEditingTransaction(null);
     showToast('Lançamento excluído.');
-  }, [transactions, showToast]);
+  }, [transactions, showToast, user]);
 
   // Update Savings Goals
   const handleUpdateGoals = useCallback((newGoals: SavingsGoal[]) => {
-    setSavingsGoals(newGoals);
-    StorageService.saveSavingsGoals(newGoals);
-  }, []);
+    if (user) {
+      // In a real app we might only sync the changed one, but for simplicity:
+      newGoals.forEach(g => FirestoreService.saveGoal(user.uid, g));
+    } else {
+      setSavingsGoals(newGoals);
+      StorageService.saveSavingsGoals(newGoals);
+    }
+  }, [user]);
 
   // Update Categories & Budgets
   const handleUpdateCategories = useCallback((newCategories: Category[]) => {
-    setCategories(newCategories);
-    StorageService.saveCategories(newCategories);
-  }, []);
+    if (user) {
+      newCategories.forEach(c => FirestoreService.saveCategory(user.uid, c));
+    } else {
+      setCategories(newCategories);
+      StorageService.saveCategories(newCategories);
+    }
+  }, [user]);
 
   // Update Reminders
   const handleUpdateReminders = useCallback((newReminders: Reminder[]) => {
-    setReminders(newReminders);
-    StorageService.saveReminders(newReminders);
-  }, []);
+    if (user) {
+      newReminders.forEach(r => FirestoreService.saveReminder(user.uid, r));
+    } else {
+      setReminders(newReminders);
+      StorageService.saveReminders(newReminders);
+    }
+  }, [user]);
 
-  // Activate Pro Subscription with duration (30 or 365 days) and distinct activationId
-  const handleActivatePro = useCallback((planName: string, durationDays: 30 | 365 = 365, activationId?: string) => {
+  // Activate Pro Subscription
+  const handleActivatePro = useCallback(async (planName: string, durationDays: 30 | 365 = 365, activationId?: string) => {
     const days: 30 | 365 = durationDays === 30 ? 30 : 365;
-    const newSub = ActivationService.buildSubscription(days, activationId);
+    const newSub = await ActivationService.buildSubscription(days, activationId);
     newSub.planName = planName;
     setSubscription(newSub);
     StorageService.saveSubscription(newSub);
     ActivationService.recordSubscriber(newSub);
-    showToast(`✓ Plano Pro (${days} Dias) Ativado! ID: ${newSub.activationId}`);
-  }, [showToast]);
 
-  const handleResetSubscription = useCallback(() => {
+    // Sync to Firestore User level if logged in
+    if (user) {
+      await FirestoreService.saveUserSubscription(user.uid, newSub);
+    }
+
+    showToast(`✓ Plano Pro (${days} Dias) Ativado! ID: ${newSub.activationId}`);
+  }, [showToast, user]);
+
+  const handleResetSubscription = useCallback(async () => {
     const freeSub: UserSubscription = {
       isPro: false,
       planName: 'Plano Gratuito',
       durationDays: 0,
       expiresAt: 0,
+      deviceId: subscription.deviceId,
     };
     setSubscription(freeSub);
     StorageService.saveSubscription(freeSub);
+
+    // Sync to Firestore User level if logged in
+    if (user) {
+      await FirestoreService.saveUserSubscription(user.uid, freeSub);
+    }
+
     showToast('✓ Plano Pro removido. Aparelho redefinido para o Gratuito.');
-  }, [showToast]);
+  }, [showToast, user, subscription.deviceId]);
 
   // Open modal for editing
   const handleSelectTransaction = useCallback((tx: Transaction) => {
@@ -221,6 +311,14 @@ export default function App() {
     <div className="h-[100dvh] w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-center overflow-hidden antialiased selection:bg-emerald-500 selection:text-white">
       {/* Offline Alert Banner */}
       <OfflineIndicator />
+
+      {/* Syncing Overlay */}
+      {isSyncing && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-sm flex flex-col items-center justify-center">
+          <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-4" />
+          <p className="text-emerald-400 font-bold animate-pulse">Sincronizando seus dados...</p>
+        </div>
+      )}
 
       {/* Floating Instant Toast */}
       {toastMessage && (
@@ -272,6 +370,9 @@ export default function App() {
             isPro={subscription.isPro}
             expiresAt={subscription.expiresAt}
             activationId={subscription.activationId}
+            user={user}
+            onSignIn={signIn}
+            onLogout={logout}
           />
         </div>
 
@@ -392,5 +493,13 @@ export default function App() {
         />
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <FirebaseProvider>
+      <AppContent />
+    </FirebaseProvider>
   );
 }

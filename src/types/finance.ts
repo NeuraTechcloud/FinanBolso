@@ -28,6 +28,7 @@ export interface Transaction {
   notes?: string;
   isRecurring?: boolean;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface SavingsGoal {

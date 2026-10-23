@@ -72,7 +72,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
       // Offline / fallback Pix order with reserved activation ID
       const durationDays: 30 | 365 = selectedPlan === 'yearly' ? 365 : 30;
       const planName = durationDays === 365 ? 'Pro Anual (365 Dias)' : 'Pro Mensal (30 Dias)';
-      const activationId = ActivationService.generateActivationId(durationDays);
+      const activationId = await ActivationService.generateActivationId(durationDays);
       const amount = durationDays === 365 ? 79.90 : 9.90;
       const fallbackPixCode = `00020126580014br.gov.bcb.pix0136finanbolso-${durationDays}d-${Math.random().toString(36).slice(2, 7)}520400005303986540${amount.toFixed(2)}5802BR5915FinanBolso Pro6009SAO PAULO62070503***6304`;
       
@@ -119,7 +119,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
     const durationDays: 30 | 365 = confirmRes.durationDays || pixData.durationDays || (selectedPlan === 'yearly' ? 365 : 30);
     const planName = confirmRes.planName || pixData.planName || (durationDays === 365 ? 'Pro Anual (365 Dias)' : 'Pro Mensal (30 Dias)');
-    const finalActivationId = confirmRes.activationId || pixData.activationId || ActivationService.generateActivationId(durationDays);
+    const finalActivationId = confirmRes.activationId || pixData.activationId || await ActivationService.generateActivationId(durationDays);
 
     onActivatePro(planName, durationDays, finalActivationId);
     setSuccessMsg(`✓ Pagamento Confirmado! Plano de ${durationDays} dias ativado com ID: ${finalActivationId}`);

@@ -99,7 +99,9 @@ export default defineConfig(() => {
       },
     },
     server: {
-      hmr: false,
+      hmr: {
+        overlay: false
+      },
       watch: null,
     },
   };

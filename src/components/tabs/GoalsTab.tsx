@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { 
   Target, 
   Plus, 
@@ -21,6 +21,7 @@ import {
 import confetti from 'canvas-confetti';
 import { SavingsGoal, Category, Transaction, Reminder, PaymentMethod } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface GoalsTabProps {
   savingsGoals: SavingsGoal[];
@@ -34,7 +35,166 @@ interface GoalsTabProps {
   onAddTransaction?: (txData: Omit<Transaction, 'id' | 'createdAt'>) => void;
 }
 
-export const GoalsTab: React.FC<GoalsTabProps> = React.memo(({
+const MemoizedGoalItem = memo<{
+  goal: SavingsGoal;
+  onDeposit: (goal: SavingsGoal) => void;
+  onEdit: (goal: SavingsGoal) => void;
+}>(({ goal, onDeposit, onEdit }) => {
+  const percent = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
+  const isComplete = percent >= 100;
+
+  return (
+    <motion.div 
+      layout
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="p-4 bg-slate-900/90 border border-slate-800/80 rounded-2xl shadow-lg relative overflow-hidden group gpu-layer"
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2.5">
+          <div 
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-inner"
+            style={{ backgroundColor: goal.color }}
+          >
+            <Target className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-white group-hover:text-emerald-300 transition">{goal.title}</h3>
+            {goal.deadline && (
+              <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                <Calendar className="w-3 h-3 text-slate-500" />
+                Prazo: {formatDateBR(goal.deadline)}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onDeposit(goal)}
+            className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 text-[11px] font-bold rounded-lg transition active:scale-95"
+          >
+            + Guardar
+          </button>
+          <button
+            onClick={() => onEdit(goal)}
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            title="Editar"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Progress */}
+      <div className="space-y-1 mt-3">
+        <div className="flex justify-between text-xs font-semibold">
+          <span className="text-emerald-400">{formatBRL(goal.currentAmount)}</span>
+          <span className="text-slate-400">Meta: {formatBRL(goal.targetAmount)} ({percent}%)</span>
+        </div>
+        <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+          <div 
+            className="h-full rounded-full transition-all duration-500"
+            style={{ 
+              width: `${percent}%`, 
+              backgroundColor: goal.color 
+            }}
+          />
+        </div>
+      </div>
+
+      {isComplete && (
+        <div className="mt-2.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-1.5 text-[11px] text-emerald-400 font-bold">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>Meta Alcançada com Sucesso! Parabéns!</span>
+        </div>
+      )}
+    </motion.div>
+  );
+});
+
+MemoizedGoalItem.displayName = 'MemoizedGoalItem';
+
+const MemoizedReminderItem = memo<{
+  rem: Reminder;
+  todayStr: string;
+  onTogglePaid: (rem: Reminder) => void;
+  onDelete: (id: string) => void;
+}>(({ rem, todayStr, onTogglePaid, onDelete }) => {
+  const isPastDue = !rem.isPaid && rem.dueDate < todayStr;
+  const isToday = !rem.isPaid && rem.dueDate === todayStr;
+
+  return (
+    <motion.div 
+      layout
+      initial={{ opacity: 0, x: -5 }}
+      animate={{ opacity: 1, x: 0 }}
+      className={`p-3.5 bg-slate-900 border rounded-2xl shadow-sm flex items-center justify-between gap-3 transition gpu-layer ${
+        rem.isPaid 
+          ? 'border-slate-800 opacity-60 bg-slate-900/50' 
+          : isPastDue 
+          ? 'border-red-500/50 bg-red-950/10' 
+          : isToday 
+          ? 'border-amber-500/50 bg-amber-950/10' 
+          : 'border-slate-800'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => onTogglePaid(rem)}
+          className={`w-6 h-6 rounded-lg border flex items-center justify-center transition shrink-0 ${
+            rem.isPaid 
+              ? 'bg-emerald-500 border-emerald-500 text-slate-950' 
+              : 'border-slate-700 bg-slate-950 hover:border-emerald-500'
+          }`}
+          title={rem.isPaid ? 'Marcar como pendente' : 'Marcar como pago'}
+        >
+          {rem.isPaid && <Check className="w-4 h-4 stroke-[3]" />}
+        </button>
+
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-bold ${rem.isPaid ? 'line-through text-slate-400' : 'text-white'}`}>
+              {rem.title}
+            </span>
+            <span className="text-[10px] px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md">
+              {rem.category}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-slate-400">
+            <span className="flex items-center gap-1">
+              <Clock className="w-3 h-3 text-slate-500" />
+              Vencimento: {formatDateBR(rem.dueDate)}
+            </span>
+            {!rem.isPaid && isPastDue && (
+              <span className="text-red-400 font-bold">Vencido!</span>
+            )}
+            {!rem.isPaid && isToday && (
+              <span className="text-amber-400 font-bold">Vence hoje!</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 shrink-0">
+        <span className={`text-xs font-bold ${rem.isPaid ? 'text-slate-400' : 'text-emerald-400'}`}>
+          {formatBRL(rem.amount)}
+        </span>
+        <button
+          onClick={() => onDelete(rem.id)}
+          className="p-1.5 text-slate-500 hover:text-red-400 rounded-lg transition"
+          title="Excluir"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </motion.div>
+  );
+});
+
+MemoizedReminderItem.displayName = 'MemoizedReminderItem';
+
+export const GoalsTab: React.FC<GoalsTabProps> = memo(({
   savingsGoals,
   categories,
   transactions,
@@ -335,77 +495,14 @@ export const GoalsTab: React.FC<GoalsTabProps> = React.memo(({
             </div>
           ) : (
             <div className="space-y-3">
-              {savingsGoals.map(goal => {
-                const percent = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
-                const isComplete = percent >= 100;
-
-                return (
-                  <div 
-                    key={goal.id}
-                    className="p-4 bg-slate-900/90 border border-slate-800/80 rounded-2xl shadow-lg relative overflow-hidden group"
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2.5">
-                        <div 
-                          className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-inner"
-                          style={{ backgroundColor: goal.color }}
-                        >
-                          <Target className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <h3 className="text-xs font-bold text-white group-hover:text-emerald-300 transition">{goal.title}</h3>
-                          {goal.deadline && (
-                            <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                              <Calendar className="w-3 h-3 text-slate-500" />
-                              Prazo: {formatDateBR(goal.deadline)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setDepositGoal(goal)}
-                          className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 text-[11px] font-bold rounded-lg transition"
-                        >
-                          + Guardar
-                        </button>
-                        <button
-                          onClick={() => handleOpenGoalModal(goal)}
-                          className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
-                          title="Editar"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Progress */}
-                    <div className="space-y-1 mt-3">
-                      <div className="flex justify-between text-xs font-semibold">
-                        <span className="text-emerald-400">{formatBRL(goal.currentAmount)}</span>
-                        <span className="text-slate-400">Meta: {formatBRL(goal.targetAmount)} ({percent}%)</span>
-                      </div>
-                      <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
-                        <div 
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${percent}%`, 
-                            backgroundColor: goal.color 
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {isComplete && (
-                      <div className="mt-2.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-1.5 text-[11px] text-emerald-400 font-bold">
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Meta Alcançada com Sucesso! Parabéns!</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {savingsGoals.map(goal => (
+                <MemoizedGoalItem
+                  key={goal.id}
+                  goal={goal}
+                  onDeposit={setDepositGoal}
+                  onEdit={handleOpenGoalModal}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -443,9 +540,12 @@ export const GoalsTab: React.FC<GoalsTabProps> = React.memo(({
               const isOver = hasLimit && spent > limit;
 
               return (
-                <div 
+                <motion.div 
+                  layout
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
                   key={cat.id}
-                  className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl shadow-sm space-y-2"
+                  className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl shadow-sm space-y-2 gpu-layer"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -519,7 +619,7 @@ export const GoalsTab: React.FC<GoalsTabProps> = React.memo(({
                   ) : (
                     <p className="text-[10px] text-slate-500 italic">Nenhum teto definido (clique no lápis para definir)</p>
                   )}
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -572,435 +672,403 @@ export const GoalsTab: React.FC<GoalsTabProps> = React.memo(({
             </div>
           ) : (
             <div className="space-y-2.5">
-              {reminders.map(rem => {
-                const isPastDue = !rem.isPaid && rem.dueDate < todayStr;
-                const isToday = !rem.isPaid && rem.dueDate === todayStr;
-
-                return (
-                  <div 
-                    key={rem.id}
-                    className={`p-3.5 bg-slate-900 border rounded-2xl shadow-sm flex items-center justify-between gap-3 transition ${
-                      rem.isPaid 
-                        ? 'border-slate-800 opacity-60 bg-slate-900/50' 
-                        : isPastDue 
-                        ? 'border-red-500/50 bg-red-950/10' 
-                        : isToday 
-                        ? 'border-amber-500/50 bg-amber-950/10' 
-                        : 'border-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => handleToggleReminderPaid(rem)}
-                        className={`w-6 h-6 rounded-lg border flex items-center justify-center transition shrink-0 ${
-                          rem.isPaid 
-                            ? 'bg-emerald-500 border-emerald-500 text-slate-950' 
-                            : 'border-slate-700 bg-slate-950 hover:border-emerald-500'
-                        }`}
-                        title={rem.isPaid ? 'Marcar como pendente' : 'Marcar como pago'}
-                      >
-                        {rem.isPaid && <Check className="w-4 h-4 stroke-[3]" />}
-                      </button>
-
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-bold ${rem.isPaid ? 'line-through text-slate-400' : 'text-white'}`}>
-                            {rem.title}
-                          </span>
-                          <span className="text-[10px] px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md">
-                            {rem.category}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-slate-500" />
-                            Vencimento: {formatDateBR(rem.dueDate)}
-                          </span>
-                          {!rem.isPaid && isPastDue && (
-                            <span className="text-red-400 font-bold">Vencido!</span>
-                          )}
-                          {!rem.isPaid && isToday && (
-                            <span className="text-amber-400 font-bold">Vence hoje!</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className={`text-xs font-bold ${rem.isPaid ? 'text-slate-400' : 'text-emerald-400'}`}>
-                        {formatBRL(rem.amount)}
-                      </span>
-                      <button
-                        onClick={() => handleDeleteReminder(rem.id)}
-                        className="p-1.5 text-slate-500 hover:text-red-400 rounded-lg transition"
-                        title="Excluir"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              {reminders.map(rem => (
+                <MemoizedReminderItem
+                  key={rem.id}
+                  rem={rem}
+                  todayStr={todayStr}
+                  onTogglePaid={handleToggleReminderPaid}
+                  onDelete={handleDeleteReminder}
+                />
+              ))}
             </div>
           )}
         </div>
       )}
 
       {/* MODAL: NEW CATEGORY */}
-      {isCategoryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <FolderPlus className="w-4 h-4 text-emerald-400" />
-                Criar Nova Categoria
-              </h3>
-              <button onClick={() => setIsCategoryModalOpen(false)} className="p-1 text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveNewCategory} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Nome da Categoria</label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  placeholder="Ex: Pet / Animais, Streaming, etc."
-                  value={catName}
-                  onChange={(e) => setCatName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
-                />
+      <AnimatePresence>
+        {isCategoryModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <FolderPlus className="w-4 h-4 text-emerald-400" />
+                  Criar Nova Categoria
+                </h3>
+                <button onClick={() => setIsCategoryModalOpen(false)} className="p-1 text-slate-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Tipo</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCatType('expense')}
-                    className={`py-2 text-xs font-bold rounded-xl border transition ${
-                      catType === 'expense' 
-                        ? 'bg-red-500/10 border-red-500 text-red-400' 
-                        : 'bg-slate-950 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    Despesa
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCatType('income')}
-                    className={`py-2 text-xs font-bold rounded-xl border transition ${
-                      catType === 'income' 
-                        ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' 
-                        : 'bg-slate-950 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    Receita
-                  </button>
-                </div>
-              </div>
-
-              {catType === 'expense' && (
+              <form onSubmit={handleSaveNewCategory} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Teto de Gasto Mensal (R$) (Opcional)</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Nome da Categoria</label>
                   <input
-                    type="number"
-                    step="50"
-                    placeholder="Ex: 400,00"
-                    value={catBudgetStr}
-                    onChange={(e) => setCatBudgetStr(e.target.value)}
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="Ex: Pet / Animais, Streaming, etc."
+                    value={catName}
+                    onChange={(e) => setCatName(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
                   />
                 </div>
-              )}
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Cor Identificadora</label>
-                <div className="flex items-center gap-2">
-                  {['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'].map(color => (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Tipo</label>
+                  <div className="grid grid-cols-2 gap-2">
                     <button
-                      key={color}
                       type="button"
-                      onClick={() => setCatColor(color)}
-                      className={`w-7 h-7 rounded-full border-2 transition ${
-                        catColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent'
+                      onClick={() => setCatType('expense')}
+                      className={`py-2 text-xs font-bold rounded-xl border transition ${
+                        catType === 'expense' 
+                          ? 'bg-red-500/10 border-red-500 text-red-400' 
+                          : 'bg-slate-950 border-slate-800 text-slate-400'
                       }`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
+                    >
+                      Despesa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCatType('income')}
+                      className={`py-2 text-xs font-bold rounded-xl border transition ${
+                        catType === 'income' 
+                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' 
+                          : 'bg-slate-950 border-slate-800 text-slate-400'
+                      }`}
+                    >
+                      Receita
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                className="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition"
-              >
-                Salvar Categoria
-              </button>
-            </form>
+                {catType === 'expense' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">Teto de Gasto Mensal (R$) (Opcional)</label>
+                    <input
+                      type="number"
+                      step="50"
+                      placeholder="Ex: 400,00"
+                      value={catBudgetStr}
+                      onChange={(e) => setCatBudgetStr(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Cor Identificadora</label>
+                  <div className="flex items-center gap-2">
+                    {['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'].map(color => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setCatColor(color)}
+                        className={`w-7 h-7 rounded-full border-2 transition ${
+                          catColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent'
+                        }`}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition active:scale-95"
+                >
+                  Salvar Categoria
+                </button>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* MODAL: NEW REMINDER */}
-      {isReminderModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Bell className="w-4 h-4 text-emerald-400" />
-                Novo Lembrete de Conta
-              </h3>
-              <button onClick={() => setIsReminderModalOpen(false)} className="p-1 text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveReminder} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Título / Descrição</label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  placeholder="Ex: Conta de Luz, Aluguel, etc."
-                  value={remTitle}
-                  onChange={(e) => setRemTitle(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
-                />
+      <AnimatePresence>
+        {isReminderModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-emerald-400" />
+                  Novo Lembrete de Conta
+                </h3>
+                <button onClick={() => setIsReminderModalOpen(false)} className="p-1 text-slate-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Valor (R$)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  placeholder="Ex: 150,00"
-                  value={remAmountStr}
-                  onChange={(e) => setRemAmountStr(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Data de Vencimento</label>
-                <input
-                  type="date"
-                  required
-                  value={remDueDate}
-                  onChange={(e) => setRemDueDate(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Categoria</label>
-                <select
-                  value={remCategory}
-                  onChange={(e) => setRemCategory(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
-                >
-                  {categories.filter(c => c.type === 'expense').map(c => (
-                    <option key={c.id} value={c.name}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition"
-              >
-                Salvar Lembrete
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: EDIT/CREATE SAVINGS GOAL */}
-      {isGoalModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white">
-                {editingGoal ? 'Editar Meta de Economia' : 'Nova Meta de Economia'}
-              </h3>
-              <button onClick={() => setIsGoalModalOpen(false)} className="p-1 text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveGoal} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Título da Meta</label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  placeholder="Ex: Viagem de Férias"
-                  value={goalTitle}
-                  onChange={(e) => setGoalTitle(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
+              <form onSubmit={handleSaveReminder} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Valor Alvo (R$)</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Título / Descrição</label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="Ex: Conta de Luz, Aluguel, etc."
+                    value={remTitle}
+                    onChange={(e) => setRemTitle(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Valor (R$)</label>
                   <input
                     type="number"
                     step="0.01"
                     required
-                    placeholder="Ex: 5000"
-                    value={goalTargetStr}
-                    onChange={(e) => setGoalTargetStr(e.target.value)}
+                    placeholder="Ex: 150,00"
+                    value={remAmountStr}
+                    onChange={(e) => setRemAmountStr(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Já Guardado (R$)</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Data de Vencimento</label>
+                  <input
+                    type="date"
+                    required
+                    value={remDueDate}
+                    onChange={(e) => setRemDueDate(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Categoria</label>
+                  <select
+                    value={remCategory}
+                    onChange={(e) => setRemCategory(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                  >
+                    {categories.filter(c => c.type === 'expense').map(c => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition active:scale-95"
+                >
+                  Salvar Lembrete
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: EDIT/CREATE SAVINGS GOAL */}
+      <AnimatePresence>
+        {isGoalModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white">
+                  {editingGoal ? 'Editar Meta de Economia' : 'Nova Meta de Economia'}
+                </h3>
+                <button onClick={() => setIsGoalModalOpen(false)} className="p-1 text-slate-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveGoal} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Título da Meta</label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="Ex: Viagem de Férias"
+                    value={goalTitle}
+                    onChange={(e) => setGoalTitle(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">Valor Alvo (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      placeholder="Ex: 5000"
+                      value={goalTargetStr}
+                      onChange={(e) => setGoalTargetStr(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">Já Guardado (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Ex: 1000"
+                      value={goalCurrentStr}
+                      onChange={(e) => setGoalCurrentStr(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Prazo Final (Opcional)</label>
+                  <input
+                    type="date"
+                    value={goalDeadline}
+                    onChange={(e) => setGoalDeadline(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Cor</label>
+                  <div className="flex items-center gap-2">
+                    {['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'].map(color => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setGoalColor(color)}
+                        className={`w-7 h-7 rounded-full border-2 transition ${
+                          goalColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent'
+                        }`}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-3">
+                  {isConfirmingGoalDelete ? (
+                    <div className="p-3 bg-red-950/50 border border-red-500/50 rounded-2xl flex items-center justify-between gap-2">
+                      <span className="text-xs text-red-300 font-semibold">Excluir esta meta?</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => editingGoal && handleDeleteGoal(editingGoal.id)}
+                          className="px-3 py-1.5 bg-red-600 text-white font-bold text-xs rounded-xl"
+                        >
+                          Sim
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsConfirmingGoalDelete(false)}
+                          className="px-2.5 py-1.5 bg-slate-800 text-slate-300 text-xs rounded-xl"
+                        >
+                          Não
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      {editingGoal && (
+                        <button
+                          type="button"
+                          onClick={() => setIsConfirmingGoalDelete(true)}
+                          className="p-2.5 text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl hover:bg-red-500/20 transition flex items-center gap-1.5"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span className="text-xs font-semibold">Excluir</span>
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition active:scale-95"
+                      >
+                        Salvar Meta
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* QUICK DEPOSIT MODAL */}
+      <AnimatePresence>
+        {depositGoal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl gpu-layer"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-white">Depositar na Meta</h3>
+                <button onClick={() => setDepositGoal(null)} className="p-1 text-slate-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-300 mb-3">
+                Guardar valor para: <strong className="text-emerald-400">{depositGoal.title}</strong>
+              </p>
+
+              <form onSubmit={handleApplyDeposit} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Quanto você guardou? (R$)</label>
                   <input
                     type="number"
                     step="0.01"
-                    placeholder="Ex: 1000"
-                    value={goalCurrentStr}
-                    onChange={(e) => setGoalCurrentStr(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                    min="0.01"
+                    required
+                    autoFocus
+                    placeholder="Ex: 250,00"
+                    value={depositAmountStr}
+                    onChange={(e) => setDepositAmountStr(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-base font-bold text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Prazo Final (Opcional)</label>
-                <input
-                  type="date"
-                  value={goalDeadline}
-                  onChange={(e) => setGoalDeadline(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Cor</label>
-                <div className="flex items-center gap-2">
-                  {['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'].map(color => (
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  {['50', '100', '250'].map(chip => (
                     <button
-                      key={color}
+                      key={chip}
                       type="button"
-                      onClick={() => setGoalColor(color)}
-                      className={`w-7 h-7 rounded-full border-2 transition ${
-                        goalColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent'
-                      }`}
-                      style={{ backgroundColor: color }}
-                    />
+                      onClick={() => setDepositAmountStr(chip)}
+                      className="py-1 text-[11px] bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition active:scale-95"
+                    >
+                      + R$ {chip}
+                    </button>
                   ))}
                 </div>
-              </div>
 
-              <div className="pt-3">
-                {isConfirmingGoalDelete ? (
-                  <div className="p-3 bg-red-950/50 border border-red-500/50 rounded-2xl flex items-center justify-between gap-2">
-                    <span className="text-xs text-red-300 font-semibold">Excluir esta meta?</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => editingGoal && handleDeleteGoal(editingGoal.id)}
-                        className="px-3 py-1.5 bg-red-600 text-white font-bold text-xs rounded-xl"
-                      >
-                        Sim
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsConfirmingGoalDelete(false)}
-                        className="px-2.5 py-1.5 bg-slate-800 text-slate-300 text-xs rounded-xl"
-                      >
-                        Não
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    {editingGoal && (
-                      <button
-                        type="button"
-                        onClick={() => setIsConfirmingGoalDelete(true)}
-                        className="p-2.5 text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl hover:bg-red-500/20 transition flex items-center gap-1.5"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span className="text-xs font-semibold">Excluir</span>
-                      </button>
-                    )}
-                    <button
-                      type="submit"
-                      className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition"
-                    >
-                      Salvar Meta
-                    </button>
-                  </div>
-                )}
-              </div>
-            </form>
+                <button
+                  type="submit"
+                  className="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition active:scale-95"
+                >
+                  Confirmar Depósito
+                </button>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
-
-      {/* QUICK DEPOSIT MODAL */}
-      {depositGoal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-white">Depositar na Meta</h3>
-              <button onClick={() => setDepositGoal(null)} className="p-1 text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-300 mb-3">
-              Guardar valor para: <strong className="text-emerald-400">{depositGoal.title}</strong>
-            </p>
-
-            <form onSubmit={handleApplyDeposit} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Quanto você guardou? (R$)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  required
-                  autoFocus
-                  placeholder="Ex: 250,00"
-                  value={depositAmountStr}
-                  onChange={(e) => setDepositAmountStr(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-base font-bold text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-1.5 pt-1">
-                {['50', '100', '250'].map(chip => (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => setDepositAmountStr(chip)}
-                    className="py-1 text-[11px] bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300"
-                  >
-                    + R$ {chip}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                type="submit"
-                className="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition"
-              >
-                Confirmar Depósito
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 });

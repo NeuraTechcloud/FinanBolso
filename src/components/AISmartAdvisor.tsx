@@ -57,16 +57,18 @@ export const AISmartAdvisor: React.FC<AISmartAdvisorProps> = ({
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setSummaryText(data.summaryText);
-          setTips(data.tips || []);
-          setHasGenerated(true);
-        }
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSummaryText(data.summaryText);
+        setTips(data.tips || []);
+        setHasGenerated(true);
+      } else {
+        console.error('AI Tips API Error:', data.error || 'Unknown error', data.details || '');
+        // If it's a specific AI failure but we have rule-engine fallback on server,
+        // it shouldn't reach here unless both failed or server crashed.
       }
     } catch (err) {
-      console.error('Error fetching AI tips:', err);
+      console.error('Network error fetching AI tips:', err);
     } finally {
       setLoading(false);
     }

@@ -190,6 +190,44 @@
       </div>
     </div>
 
+    <script>
+      // Suppression script for Vite WebSocket noise in AI Studio
+      (function() {
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        const isViteNoise = (msg) => {
+          if (typeof msg !== 'string') return false;
+          return msg.includes('[vite] WebSocket') || 
+                 msg.includes('WebSocket closed') || 
+                 msg.includes('WebSocket connection to') ||
+                 msg.includes('failed: Error in connection establishment');
+        };
+        
+        console.error = function() {
+          if (isViteNoise(arguments[0])) return;
+          originalError.apply(console, arguments);
+        };
+        
+        console.warn = function() {
+          if (isViteNoise(arguments[0])) return;
+          originalWarn.apply(console, arguments);
+        };
+
+        window.addEventListener('error', function(event) {
+          if (isViteNoise(event.message) || isViteNoise(event.error?.message)) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (isViteNoise(event.reason?.message) || isViteNoise(event.reason)) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

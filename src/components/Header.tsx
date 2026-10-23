@@ -8,11 +8,13 @@ import {
   Monitor, 
   Calendar,
   Sparkles,
-  Crown
+  Crown,
+  LogOut
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { HapticService } from '../services/haptics';
+import { User } from 'firebase/auth';
 
 interface HeaderProps {
   selectedMonth: string; // YYYY-MM or 'all'
@@ -22,6 +24,9 @@ interface HeaderProps {
   isPro?: boolean;
   expiresAt?: number;
   activationId?: string;
+  user?: User | null;
+  onSignIn?: () => void;
+  onLogout?: () => void;
 }
 
 const MONTH_NAMES = [
@@ -37,6 +42,9 @@ export const Header: React.FC<HeaderProps> = React.memo(({
   isPro = false,
   expiresAt = 0,
   activationId,
+  user,
+  onSignIn,
+  onLogout,
 }) => {
   const remainingDays = isPro && expiresAt ? Math.max(0, Math.ceil((expiresAt - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
   const isWarningNearExpiry = isPro && remainingDays <= 5;
@@ -153,7 +161,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
           {/* Clube Pro Badge / Button */}
           <button
             onClick={() => (window as any)._openSubscriptionModal?.()}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition active:scale-95 ${
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition active:scale-95 ${
               isPro 
                 ? 'text-emerald-300 bg-emerald-500/15 border border-emerald-500/40' 
                 : 'text-amber-300 bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25'
@@ -167,23 +175,46 @@ export const Header: React.FC<HeaderProps> = React.memo(({
           {/* Desktop Preview Frame Switcher (hidden on small touch screens) */}
           <button
             onClick={onTogglePhoneFrame}
-            className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 bg-slate-900 border border-slate-800 hover:border-slate-700 transition"
+            className="hidden md:flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-slate-300 bg-slate-900 border border-slate-800 hover:border-slate-700 transition"
             title={isPhoneFrame ? 'Alternar para layout fluido' : 'Alternar para moldura de smartphone'}
           >
             {isPhoneFrame ? (
-              <>
-                <Monitor className="w-3.5 h-3.5 text-blue-400" />
-                <span className="text-[11px]">Tela Cheia</span>
-              </>
+              <Monitor className="w-3.5 h-3.5 text-blue-400" />
             ) : (
-              <>
-                <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-[11px]">Modo Celular</span>
-              </>
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
             )}
           </button>
 
           <PWAInstallButton variant="button" />
+
+          {/* Firebase Auth Button */}
+          {user ? (
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1.5 p-0.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition group/user relative"
+              title={`Logado como ${user.displayName || user.email}`}
+            >
+              {user.photoURL ? (
+                <img src={user.photoURL} alt="Avatar" className="w-7 h-7 rounded-[10px] object-cover border border-slate-700" />
+              ) : (
+                <div className="w-7 h-7 rounded-[10px] bg-emerald-500/20 flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
+                  {user.displayName?.charAt(0) || user.email?.charAt(0)}
+                </div>
+              )}
+              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-slate-950 rounded-full flex items-center justify-center border border-slate-800">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+              </div>
+            </button>
+          ) : (
+            <button
+              onClick={onSignIn}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition active:scale-95 shadow-lg shadow-emerald-500/20"
+              title="Entrar com Google"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Acessar</span>
+            </button>
+          )}
         </div>
       </div>
 

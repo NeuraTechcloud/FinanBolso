@@ -384,11 +384,14 @@ if (process.env.GEMINI_API_KEY) {
   });
 }
 
+let lastQuotaExceededTime: number | null = null;
+const QUOTA_EXHAUSTED_COOLDOWN = 1000 * 60 * 60; // 1 hour
+
 app.post('/api/ai/financial-tips', async (req, res) => {
   try {
     const { incomeTotal, expenseTotal, monthTransactions, categories } = req.body;
 
-    if (process.env.GEMINI_API_KEY) {
+    if (process.env.GEMINI_API_KEY && (!lastQuotaExceededTime || Date.now() - lastQuotaExceededTime > QUOTA_EXHAUSTED_COOLDOWN)) {
       const client = aiClient || new GoogleGenAI({
         apiKey: process.env.GEMINI_API_KEY,
         httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
@@ -409,38 +412,47 @@ Retorne um objeto JSON contendo:
    - "estimatedMonthlySavings": valor estimado em R$ de economia mensal que o usuário conseguirá se aplicar a dica (número positivo).
    - "impact": "Alto", "Médio" ou "Baixo"`;
 
-      const geminiRes = await client.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              summaryText: { type: Type.STRING },
-              tips: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    category: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    estimatedMonthlySavings: { type: Type.NUMBER },
-                    impact: { type: Type.STRING },
+      try {
+        const geminiRes = await client.models.generateContent({
+          model: 'gemini-flash-latest',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                summaryText: { type: Type.STRING },
+                tips: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      title: { type: Type.STRING },
+                      category: { type: Type.STRING },
+                      description: { type: Type.STRING },
+                      estimatedMonthlySavings: { type: Type.NUMBER },
+                      impact: { type: Type.STRING },
+                    },
+                    required: ['title', 'category', 'description', 'estimatedMonthlySavings', 'impact'],
                   },
-                  required: ['title', 'category', 'description', 'estimatedMonthlySavings', 'impact'],
                 },
               },
+              required: ['summaryText', 'tips'],
             },
-            required: ['summaryText', 'tips'],
           },
-        },
-      });
+        });
 
-      if (geminiRes.text) {
-        const parsed = JSON.parse(geminiRes.text.trim());
-        return res.json({ success: true, source: 'ai', ...parsed });
+        if (geminiRes && geminiRes.text) {
+          const parsed = JSON.parse(geminiRes.text.trim());
+          if (parsed && parsed.summaryText && Array.isArray(parsed.tips)) {
+            return res.json({ success: true, source: 'ai', ...parsed });
+          }
+        }
+      } catch (aiError) {
+        console.error('AI API Error (Quota/Auth/Model) - Falling back to rule-engine:', aiError instanceof Error ? aiError.message : String(aiError));
+        if (aiError instanceof Error && aiError.message.includes('429')) {
+            lastQuotaExceededTime = Date.now();
+        }
       }
     }
 
@@ -486,7 +498,12 @@ Retorne um objeto JSON contendo:
     });
   } catch (error) {
     console.error('Error generating AI financial tips:', error);
-    return res.status(500).json({ success: false, error: 'Falha ao gerar dicas financeiras' });
+    const errorMessage = error instanceof Error ? error.message : 'Falha desconhecida';
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Falha ao gerar dicas financeiras',
+      details: errorMessage
+    });
   }
 });
 
@@ -496,7 +513,12 @@ Retorne um objeto JSON contendo:
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false },
+      server: { 
+        middlewareMode: true, 
+        hmr: { 
+          overlay: false 
+        } 
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

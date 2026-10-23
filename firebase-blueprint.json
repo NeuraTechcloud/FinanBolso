@@ -1,0 +1,158 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["expense", "income"] },
+        "amount": { "type": "number" },
+        "description": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string" },
+        "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "paymentMethod": { "type": "string" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "isRecurring": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "type", "amount", "description", "category", "date", "paymentMethod", "createdAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Custom transaction category",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 50 },
+        "type": { "type": "string", "enum": ["expense", "income"] },
+        "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "icon": { "type": "string" },
+        "monthlyBudget": { "type": "number" }
+      },
+      "required": ["id", "name", "type", "color", "icon"]
+    },
+    "SavingsGoal": {
+      "title": "SavingsGoal",
+      "description": "Savings goal record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 100 },
+        "targetAmount": { "type": "number" },
+        "currentAmount": { "type": "number" },
+        "deadline": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "icon": { "type": "string" }
+      },
+      "required": ["id", "title", "targetAmount", "currentAmount", "color", "icon"]
+    },
+    "Reminder": {
+      "title": "Reminder",
+      "description": "Payment reminder record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 100 },
+        "amount": { "type": "number" },
+        "dueDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "category": { "type": "string" },
+        "isPaid": { "type": "boolean" },
+        "paymentMethod": { "type": "string" },
+        "notes": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "title", "amount", "dueDate", "category", "isPaid"]
+    },
+    "Device": {
+      "title": "Device",
+      "description": "Registered device and subscription info",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "plan": { "type": "string" },
+        "durationDays": { "type": "number" },
+        "activationId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Ativo", "Expirado"] },
+        "expiresAt": { "type": "string" },
+        "managedAssetsValue": { "type": "number" },
+        "platform": { "type": "string" },
+        "resolution": { "type": "string" },
+        "userId": { "type": "string" },
+        "lastSeen": { "type": "number" }
+      },
+      "required": ["id", "deviceId", "name", "plan", "status", "expiresAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile and subscription",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "lastLogin": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "subscription": {
+          "type": "object",
+          "properties": {
+            "isPro": { "type": "boolean" },
+            "planName": { "type": "string" },
+            "durationDays": { "type": "number" },
+            "activationId": { "type": "string" },
+            "expiresAt": { "type": "number" }
+          }
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "Activation": {
+      "title": "Activation",
+      "description": "Valid activation key",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string" },
+        "durationDays": { "type": "number", "enum": [30, 365] },
+        "issuedAt": { "type": "number" },
+        "label": { "type": "string" },
+        "usedBy": { "type": "string" },
+        "usedAt": { "type": "number" }
+      },
+      "required": ["key", "durationDays", "issuedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "User transactions"
+    },
+    "/users/{userId}/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "User custom categories"
+    },
+    "/users/{userId}/savingsGoals/{goalId}": {
+      "schema": "SavingsGoal",
+      "description": "User savings goals"
+    },
+    "/users/{userId}/reminders/{reminderId}": {
+      "schema": "Reminder",
+      "description": "User payment reminders"
+    },
+    "/devices/{deviceId}": {
+      "schema": "Device",
+      "description": "Central device registry for ADM"
+    },
+    "/activations/{activationKey}": {
+      "schema": "Activation",
+      "description": "Authorized activation keys"
+    }
+  }
+}

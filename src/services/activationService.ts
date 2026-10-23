@@ -1,6 +1,9 @@
 // Service for generating and validating 30-day and 365-day Pro Activation IDs
 import { UserSubscription } from '../types/finance';
 import { StorageService } from './storage';
+import { FirestoreService } from './firestore';
+import { auth, db } from '../lib/firebase';
+import { getDoc, doc as firestoreDoc } from 'firebase/firestore';
 
 export interface ActivationValidationResult {
   valid: boolean;
@@ -48,16 +51,26 @@ export const ActivationService = {
   },
 
   // Register a newly generated key into the authorized pool
-  registerAuthorizedKey(key: string, durationDays: 30 | 365, label?: string): void {
-    const keys = this.getAuthorizedKeys();
+  async registerAuthorizedKey(key: string, durationDays: 30 | 365, label?: string): Promise<void> {
     const cleanKey = key.trim().toUpperCase();
+    const keyData = {
+      key: cleanKey,
+      durationDays,
+      issuedAt: Date.now(),
+      label: label || `Emitido pelo ADM (${durationDays}d)`,
+    };
+
+    try {
+      // 1. Save to Firestore
+      await FirestoreService.saveActivationKey(keyData);
+    } catch (err) {
+      console.error('Failed to save activation key to Firestore:', err);
+    }
+
+    // 2. Fallback to LocalStorage (always save locally for persistence if offline)
+    const keys = this.getAuthorizedKeys();
     if (!keys.some(k => k.key.toUpperCase() === cleanKey)) {
-      keys.unshift({
-        key: cleanKey,
-        durationDays,
-        issuedAt: Date.now(),
-        label,
-      });
+      keys.unshift(keyData);
       try {
         localStorage.setItem(STORAGE_AUTHORIZED_KEYS, JSON.stringify(keys));
       } catch {}
@@ -65,9 +78,14 @@ export const ActivationService = {
   },
 
   // Delete an unused key from the authorized pool
-  deleteAuthorizedKey(keyToDelete: string): void {
-    const keys = this.getAuthorizedKeys();
+  async deleteAuthorizedKey(keyToDelete: string): Promise<void> {
     const cleanKey = keyToDelete.trim().toUpperCase();
+    
+    // 1. Delete from Firestore
+    await FirestoreService.deleteActivationKey(cleanKey);
+
+    // 2. Fallback to LocalStorage
+    const keys = this.getAuthorizedKeys();
     const filtered = keys.filter(k => k.key.toUpperCase() !== cleanKey);
     try {
       localStorage.setItem(STORAGE_AUTHORIZED_KEYS, JSON.stringify(filtered));
@@ -75,12 +93,12 @@ export const ActivationService = {
   },
 
   // Generate a distinct Activation ID for 30 or 365 days and register it
-  generateActivationId(durationDays: 30 | 365, label?: string): string {
+  async generateActivationId(durationDays: 30 | 365, label?: string): Promise<string> {
     const prefix = durationDays === 30 ? 'PRO-30D' : 'PRO-365D';
     const part1 = generateRandomSegment(4);
     const part2 = generateRandomSegment(4);
     const key = `${prefix}-${part1}-${part2}`;
-    this.registerAuthorizedKey(key, durationDays, label || `Emitido pelo ADM (${durationDays}d)`);
+    await this.registerAuthorizedKey(key, durationDays, label || `Emitido pelo ADM (${durationDays}d)`);
     return key;
   },
 
@@ -100,7 +118,27 @@ export const ActivationService = {
 
     const deviceId = StorageService.getDeviceId();
 
-    // 1. Try server verification first if online
+    // 1. Try Firestore verification first
+    try {
+      const keyDoc = await getDoc(firestoreDoc(db, 'activations', id));
+      if (keyDoc.exists()) {
+        const data = keyDoc.data();
+        // Check if key is already used by another device (optional strictness)
+        // For now, let's allow it but record usage
+        return {
+          valid: true,
+          durationDays: data.durationDays === 365 ? 365 : 30,
+          planName: data.durationDays === 365 ? 'Pro Anual (365 Dias)' : 'Pro Mensal (30 Dias)',
+          activationId: id,
+          deviceId,
+          message: `Código validado com sucesso via Nuvem e vinculado a este aparelho (${deviceId})!`,
+        };
+      }
+    } catch (e) {
+      console.error('Firestore key validation failed, falling back:', e);
+    }
+
+    // 2. Try legacy server verification if online
     try {
       const response = await fetch('/api/subscription/validate-id', {
         method: 'POST',
@@ -179,10 +217,10 @@ export const ActivationService = {
   },
 
   // Create an active UserSubscription object bound to device
-  buildSubscription(durationDays: 30 | 365, activationId?: string): UserSubscription {
+  async buildSubscription(durationDays: 30 | 365, activationId?: string): Promise<UserSubscription> {
     const days = durationDays === 30 ? 30 : 365;
     const now = Date.now();
-    const id = activationId || this.generateActivationId(days, 'Ativação Master');
+    const id = activationId || await this.generateActivationId(days, 'Ativação Master');
     const deviceId = StorageService.getDeviceId();
     return {
       isPro: true,
@@ -234,6 +272,41 @@ export const ActivationService = {
     try {
       const devInfo = StorageService.getDeviceInfo();
       const deviceId = devInfo.deviceId;
+      const currentUser = auth.currentUser;
+
+      // 1. Check for User-Level Subscription first if logged in
+      if (currentUser) {
+        try {
+          const userDoc: any = await FirestoreService.getUser(currentUser.uid);
+          if (userDoc && userDoc.subscription && userDoc.subscription.isPro) {
+            const userSub = userDoc.subscription;
+            // Sync local with User-Level Pro
+            if (!subscription.isPro || subscription.activationId !== userSub.activationId) {
+              const updatedSub: UserSubscription = {
+                ...userSub,
+                deviceId,
+              };
+              StorageService.saveSubscription(updatedSub);
+              // Also update device record to show it's Pro via User
+              await FirestoreService.registerDevice(deviceId, {
+                ...devInfo,
+                userId: currentUser.uid,
+                email: currentUser.email,
+                plan: userSub.planName,
+                status: 'Ativo',
+                expiresAt: new Date(userSub.expiresAt).toISOString().slice(0, 10),
+                activationId: userSub.activationId,
+                durationDays: userSub.durationDays
+              });
+              return updatedSub;
+            }
+          }
+        } catch (e) {
+          console.error('Error fetching user subscription from Firestore:', e);
+        }
+      }
+
+      // 2. Standard Device-Level logic
       const planName = subscription.isPro ? subscription.planName : 'Gratuito';
       const activationId = subscription.activationId || (subscription.isPro ? 'PRO-ACTIVE' : 'FREE-DEVICE');
 
@@ -244,54 +317,59 @@ export const ActivationService = {
         id: deviceId,
         deviceId,
         name: `Aparelho ${devInfo.platform} (${deviceId.slice(-6)})`,
-        email: `aparelho_${deviceId.toLowerCase().replace(/[^a-z0-9]/g, '')}@finanbolso.app`,
+        email: currentUser?.email || `aparelho_${deviceId.toLowerCase().replace(/[^a-z0-9]/g, '')}@finanbolso.app`,
         plan: planName,
         durationDays: subscription.durationDays || (subscription.isPro ? 30 : 0),
         activationId,
-        status: subscription.isPro ? ('Ativo' as const) : ('Expirado' as const),
+        status: (subscription.isPro && (subscription.expiresAt || 0) > Date.now()) ? ('Ativo' as const) : ('Expirado' as const),
         expiresAt: subscription.expiresAt ? new Date(subscription.expiresAt).toISOString().slice(0, 10) : '2027-12-31',
         managedAssetsValue: userAssets,
         platform: devInfo.platform,
         resolution: devInfo.screenResolution,
+        userId: currentUser?.uid || null,
       };
 
-      // 1. Post current presence to server
-      await fetch('/api/subscription/subscribers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry),
-      });
+      // Post current presence to Firestore
+      await FirestoreService.registerDevice(deviceId, entry);
 
-      // 2. Fetch server-recorded status to check if ADM modified or revoked/renewed plan on server
-      const statusRes = await fetch(`/api/subscription/device-status/${encodeURIComponent(deviceId)}`);
-      if (statusRes.ok) {
-        const data = await statusRes.json();
-        if (data.found && data.subscriber) {
-          const serverSub = data.subscriber;
-          // If ADM revoked Pro on server (plan is Gratuito or status is Expirado)
-          if ((serverSub.plan === 'Gratuito' || serverSub.status === 'Expirado') && subscription.isPro) {
-            const freeSub: UserSubscription = {
-              isPro: false,
-              planName: 'Plano Gratuito',
-              durationDays: 0,
-              expiresAt: 0,
-              deviceId,
-            };
-            StorageService.saveSubscription(freeSub);
-            return freeSub;
-          }
-          // If ADM granted or renewed Pro on server and local device is Free
-          if (serverSub.status === 'Ativo' && serverSub.plan !== 'Gratuito' && !subscription.isPro) {
-            const durationDays: 30 | 365 = serverSub.durationDays === 30 ? 30 : 365;
-            const proSub = this.buildSubscription(durationDays, serverSub.activationId || 'PRO-ADM-GRANTED');
-            proSub.planName = serverSub.plan || (durationDays === 30 ? 'Pro Mensal (30 Dias)' : 'Pro Anual (365 Dias)');
-            StorageService.saveSubscription(proSub);
-            return proSub;
-          }
+      // Fetch server-recorded status from Firestore to check if ADM modified or revoked/renewed plan
+      const deviceDoc: any = await FirestoreService.getDevice(deviceId);
+      
+      if (deviceDoc) {
+        const isServerPro = deviceDoc.status === 'Ativo' && deviceDoc.plan !== 'Gratuito';
+        
+        // Case A: ADM revoked Pro (server says Free/Expired, local says Pro)
+        if (!isServerPro && subscription.isPro) {
+          const freeSub: UserSubscription = {
+            isPro: false,
+            planName: 'Plano Gratuito',
+            durationDays: 0,
+            expiresAt: 0,
+            deviceId,
+          };
+          StorageService.saveSubscription(freeSub);
+          return freeSub;
+        }
+        
+        // Case B: ADM granted/renewed Pro (server says Pro, local says Free or different plan)
+        if (isServerPro && (!subscription.isPro || subscription.activationId !== deviceDoc.activationId)) {
+          const durationDays: 30 | 365 = deviceDoc.durationDays === 30 ? 30 : 365;
+          const proSub: UserSubscription = {
+            isPro: true,
+            planName: deviceDoc.plan,
+            planType: durationDays === 365 ? 'yearly' : 'monthly',
+            durationDays,
+            activationId: deviceDoc.activationId || 'PRO-ADM-GRANTED',
+            deviceId,
+            activatedAt: Date.now(),
+            expiresAt: deviceDoc.expiresAt ? new Date(deviceDoc.expiresAt).getTime() : Date.now() + durationDays * 86400000,
+          };
+          StorageService.saveSubscription(proSub);
+          return proSub;
         }
       }
 
-      // Update local storage cache of subscribers
+      // Update local storage cache for offline fallback
       const saved = localStorage.getItem('finanbolso_admin_subscribers_v1');
       let subs: any[] = saved ? JSON.parse(saved) : [];
       const existingIdx = subs.findIndex((s: any) => s.deviceId === deviceId || s.id === deviceId);
@@ -301,7 +379,9 @@ export const ActivationService = {
         subs.unshift(entry);
       }
       localStorage.setItem('finanbolso_admin_subscribers_v1', JSON.stringify(subs));
-    } catch {}
+    } catch (err) {
+      console.error('Error in registerDevicePresence:', err);
+    }
     return null;
   }
 };
