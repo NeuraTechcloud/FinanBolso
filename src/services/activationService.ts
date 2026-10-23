@@ -217,5 +217,43 @@ export const ActivationService = {
 
       localStorage.setItem('finanbolso_admin_subscribers_v1', JSON.stringify(subs));
     } catch {}
+  },
+
+  // Force registration of device presence and unique device ID for ADM management
+  registerDevicePresence(subscription: UserSubscription): void {
+    try {
+      const devInfo = StorageService.getDeviceInfo();
+      const deviceId = devInfo.deviceId;
+      const saved = localStorage.getItem('finanbolso_admin_subscribers_v1');
+      let subs: any[] = saved ? JSON.parse(saved) : [];
+
+      const existingIdx = subs.findIndex((s: any) => s.deviceId === deviceId || s.id === deviceId);
+
+      const planName = subscription.isPro ? subscription.planName : 'Gratuito';
+      const activationId = subscription.activationId || (subscription.isPro ? 'PRO-ACTIVE' : 'FREE-DEVICE');
+
+      const entry = {
+        id: existingIdx >= 0 ? subs[existingIdx].id : deviceId,
+        deviceId,
+        name: existingIdx >= 0 ? subs[existingIdx].name : `Aparelho ${devInfo.platform} (${deviceId.slice(-6)})`,
+        email: existingIdx >= 0 ? subs[existingIdx].email : `aparelho_${deviceId.toLowerCase().replace(/[^a-z0-9]/g, '')}@finanbolso.app`,
+        plan: planName,
+        durationDays: subscription.durationDays || (subscription.isPro ? 30 : 0),
+        activationId,
+        status: 'Ativo' as const,
+        expiresAt: subscription.expiresAt ? new Date(subscription.expiresAt).toISOString().slice(0, 10) : '2027-12-31',
+        managedAssetsValue: existingIdx >= 0 ? subs[existingIdx].managedAssetsValue : 25000.00,
+        platform: devInfo.platform,
+        resolution: devInfo.screenResolution,
+      };
+
+      if (existingIdx >= 0) {
+        subs[existingIdx] = { ...subs[existingIdx], ...entry, plan: planName };
+      } else {
+        subs.unshift(entry);
+      }
+
+      localStorage.setItem('finanbolso_admin_subscribers_v1', JSON.stringify(subs));
+    } catch {}
   }
 };

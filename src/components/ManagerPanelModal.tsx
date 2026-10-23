@@ -552,10 +552,18 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                           <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-2">
                             <span>{sub.email}</span>
                             <span className="text-emerald-400 font-semibold">• {sub.plan}</span>
+                            {sub.deviceId && (
+                              <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                                Aparelho: {sub.deviceId}
+                              </span>
+                            )}
                             {sub.activationId && (
                               <span className="text-[10px] font-mono text-slate-300 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
-                                ID: {sub.activationId}
+                                Licença: {sub.activationId}
                               </span>
+                            )}
+                            {sub.platform && (
+                              <span className="text-[10px] text-slate-400">• {sub.platform}</span>
                             )}
                           </div>
                         </div>

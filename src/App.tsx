@@ -63,10 +63,11 @@ export default function App() {
     };
   }, []);
 
-  // Load from local offline storage on mount
+  // Load from local offline storage on mount & force device registration
   useEffect(() => {
     loadData();
-  }, []);
+    ActivationService.registerDevicePresence(subscription);
+  }, [subscription]);
 
   const loadData = () => {
     const loadedTx = StorageService.getTransactions();
