@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -254,35 +255,36 @@ app.post('/api/subscription/validate-id', (req, res) => {
   });
 });
 
-// Global server-side subscribers & connected devices store
-const globalSubscribers = new Map<string, any>([
-  ['DEV-BR-TEST-01', {
-    id: 'DEV-BR-TEST-01',
-    deviceId: 'DEV-BR-TEST-01',
-    name: 'Aparelho Android de Teste 1',
-    email: 'teste1@finanbolso.app',
-    plan: 'Pro Mensal (30 Dias)',
-    durationDays: 30,
-    activationId: 'PRO-30D-TEST-01',
-    status: 'Ativo',
-    expiresAt: '2026-12-31',
-    managedAssetsValue: 45000.00,
-    platform: 'Smartphone Android',
-  }],
-  ['DEV-BR-TEST-02', {
-    id: 'DEV-BR-TEST-02',
-    deviceId: 'DEV-BR-TEST-02',
-    name: 'Aparelho Android de Teste 2',
-    email: 'teste2@finanbolso.app',
-    plan: 'Pro Anual (365 Dias)',
-    durationDays: 365,
-    activationId: 'PRO-365D-TEST-02',
-    status: 'Ativo',
-    expiresAt: '2027-12-31',
-    managedAssetsValue: 150000.00,
-    platform: 'Smartphone Android',
-  }]
-]);
+// Global server-side subscribers & connected devices store with JSON file persistence
+const DB_FILE = path.join(process.cwd(), 'subscribers_db.json');
+
+function loadPersistentSubscribers(): Map<string, any> {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+      const arr = JSON.parse(raw);
+      const map = new Map();
+      if (Array.isArray(arr)) {
+        arr.forEach(item => {
+          if (item && (item.id || item.deviceId)) {
+            map.set(item.deviceId || item.id, item);
+          }
+        });
+      }
+      return map;
+    }
+  } catch {}
+  return new Map();
+}
+
+function savePersistentSubscribers(map: Map<string, any>) {
+  try {
+    const arr = Array.from(map.values());
+    fs.writeFileSync(DB_FILE, JSON.stringify(arr, null, 2), 'utf-8');
+  } catch {}
+}
+
+const globalSubscribers = loadPersistentSubscribers();
 
 // API Endpoints for Global Subscribers Sync
 app.get('/api/subscription/subscribers', (_req, res) => {
@@ -299,6 +301,7 @@ app.post('/api/subscription/subscribers', (req, res) => {
   if (sub.id && sub.id !== key) {
     globalSubscribers.set(sub.id, sub);
   }
+  savePersistentSubscribers(globalSubscribers);
   return res.json({ success: true, subscriber: sub });
 });
 
@@ -310,6 +313,7 @@ app.delete('/api/subscription/subscribers/:id', (req, res) => {
       globalSubscribers.delete(key);
     }
   }
+  savePersistentSubscribers(globalSubscribers);
   return res.json({ success: true });
 });
 
