@@ -255,7 +255,34 @@ app.post('/api/subscription/validate-id', (req, res) => {
 });
 
 // Global server-side subscribers & connected devices store
-const globalSubscribers = new Map<string, any>();
+const globalSubscribers = new Map<string, any>([
+  ['DEV-BR-TEST-01', {
+    id: 'DEV-BR-TEST-01',
+    deviceId: 'DEV-BR-TEST-01',
+    name: 'Aparelho Android de Teste 1',
+    email: 'teste1@finanbolso.app',
+    plan: 'Pro Mensal (30 Dias)',
+    durationDays: 30,
+    activationId: 'PRO-30D-TEST-01',
+    status: 'Ativo',
+    expiresAt: '2026-12-31',
+    managedAssetsValue: 45000.00,
+    platform: 'Smartphone Android',
+  }],
+  ['DEV-BR-TEST-02', {
+    id: 'DEV-BR-TEST-02',
+    deviceId: 'DEV-BR-TEST-02',
+    name: 'Aparelho Android de Teste 2',
+    email: 'teste2@finanbolso.app',
+    plan: 'Pro Anual (365 Dias)',
+    durationDays: 365,
+    activationId: 'PRO-365D-TEST-02',
+    status: 'Ativo',
+    expiresAt: '2027-12-31',
+    managedAssetsValue: 150000.00,
+    platform: 'Smartphone Android',
+  }]
+]);
 
 // API Endpoints for Global Subscribers Sync
 app.get('/api/subscription/subscribers', (_req, res) => {

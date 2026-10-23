@@ -181,7 +181,7 @@ export default function App() {
     const freeSub: UserSubscription = {
       isPro: false,
       planName: 'Plano Gratuito',
-      planType: 'free',
+      durationDays: 0,
       expiresAt: 0,
     };
     setSubscription(freeSub);

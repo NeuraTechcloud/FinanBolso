@@ -36,6 +36,8 @@ interface Subscriber {
   status: 'Ativo' | 'Pendente' | 'Expirado';
   expiresAt: string;
   managedAssetsValue: number;
+  deviceId?: string;
+  platform?: string;
 }
 
 interface ManagerPanelModalProps {
@@ -100,23 +102,54 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const fetchAllSubscribers = async () => {
+        let remoteSubs: any[] = [];
         try {
           const res = await fetch('/api/subscription/subscribers');
           if (res.ok) {
             const data = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
-              setSubscribers(data);
-              localStorage.setItem('finanbolso_admin_subscribers_v1', JSON.stringify(data));
-              return;
+            if (Array.isArray(data)) {
+              remoteSubs = data;
             }
           }
         } catch {}
 
+        let localSubs: any[] = [];
         try {
           const saved = localStorage.getItem('finanbolso_admin_subscribers_v1');
           if (saved) {
-            setSubscribers(JSON.parse(saved));
+            localSubs = JSON.parse(saved);
           }
+        } catch {}
+
+        const devInfo = StorageService.getDeviceInfo();
+        const currentSub = StorageService.getSubscription();
+        const currentEntry = {
+          id: devInfo.deviceId,
+          deviceId: devInfo.deviceId,
+          name: `Aparelho ${devInfo.platform} (${devInfo.deviceId.slice(-6)})`,
+          email: `aparelho_${devInfo.deviceId.toLowerCase().replace(/[^a-z0-9]/g, '')}@finanbolso.app`,
+          plan: currentSub.isPro ? currentSub.planName : 'Gratuito',
+          durationDays: currentSub.durationDays || (currentSub.isPro ? 30 : 0),
+          activationId: currentSub.activationId || (currentSub.isPro ? 'PRO-ACTIVE' : 'FREE-DEVICE'),
+          status: 'Ativo' as const,
+          expiresAt: currentSub.expiresAt ? new Date(currentSub.expiresAt).toISOString().slice(0, 10) : '2027-12-31',
+          managedAssetsValue: 35000.00,
+          platform: devInfo.platform,
+          resolution: devInfo.screenResolution,
+        };
+
+        const combinedMap = new Map<string, any>();
+        [currentEntry, ...remoteSubs, ...localSubs].forEach(s => {
+          const key = s.deviceId || s.id;
+          if (key && !combinedMap.has(key)) {
+            combinedMap.set(key, s);
+          }
+        });
+
+        const finalSubs = Array.from(combinedMap.values());
+        setSubscribers(finalSubs);
+        try {
+          localStorage.setItem('finanbolso_admin_subscribers_v1', JSON.stringify(finalSubs));
         } catch {}
       };
       fetchAllSubscribers();
