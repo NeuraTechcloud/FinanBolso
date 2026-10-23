@@ -4,7 +4,9 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   onAuthStateChanged, 
-  signOut 
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { FirestoreService } from '../services/firestore';
@@ -14,6 +16,8 @@ interface FirebaseContextType {
   user: User | null;
   loading: boolean;
   signIn: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   isSyncing: boolean;
 }
@@ -45,8 +49,6 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               goals: StorageService.getSavingsGoals(),
               reminders: StorageService.getReminders()
             });
-            // Clear local storage after successful sync? 
-            // Better to keep it as cache but prioritize Firestore
           } catch (e) {
             console.error('Initial sync failed:', e);
           } finally {
@@ -65,6 +67,25 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await signInWithPopup(auth, provider);
     } catch (error) {
       console.error('Sign in failed:', error);
+      throw error;
+    }
+  };
+
+  const signInWithEmail = async (email: string, password: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      console.error('Email sign in failed:', error);
+      throw error;
+    }
+  };
+
+  const signUpWithEmail = async (email: string, password: string) => {
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      console.error('Email sign up failed:', error);
+      throw error;
     }
   };
 
@@ -77,7 +98,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   return (
-    <FirebaseContext.Provider value={{ user, loading, signIn, logout, isSyncing }}>
+    <FirebaseContext.Provider value={{ user, loading, signIn, signInWithEmail, signUpWithEmail, logout, isSyncing }}>
       {children}
     </FirebaseContext.Provider>
   );

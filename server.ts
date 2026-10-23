@@ -368,121 +368,37 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 5. AI Financial Tips & Suggestions Endpoint (Gemini @google/genai)
+// 5. Financial Tips & Suggestions Endpoint (Simplified / Rule-Based)
 // ------------------------------------------------------------------
-import { GoogleGenAI, Type } from '@google/genai';
-
-let aiClient: GoogleGenAI | null = null;
-if (process.env.GEMINI_API_KEY) {
-  aiClient = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
-}
-
-let lastQuotaExceededTime: number | null = null;
-const QUOTA_EXHAUSTED_COOLDOWN = 1000 * 60 * 60; // 1 hour
-
 app.post('/api/ai/financial-tips', async (req, res) => {
   try {
-    const { incomeTotal, expenseTotal, monthTransactions, categories } = req.body;
-
-    if (process.env.GEMINI_API_KEY && (!lastQuotaExceededTime || Date.now() - lastQuotaExceededTime > QUOTA_EXHAUSTED_COOLDOWN)) {
-      const client = aiClient || new GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY,
-        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
-      });
-
-      const prompt = `Analise os dados financeiros mensais do usuário e forneça 3 a 4 dicas práticas e realistas em português do Brasil para ele economizar dinheiro neste mês:
-- Receitas totais: R$ ${Number(incomeTotal || 0).toFixed(2)}
-- Despesas totais: R$ ${Number(expenseTotal || 0).toFixed(2)}
-- Lançamentos do mês: ${JSON.stringify((monthTransactions || []).slice(0, 15))}
-- Categorias cadastradas: ${JSON.stringify((categories || []).map((c: any) => ({ name: c.name, budget: c.monthlyBudget })))}
-
-Retorne um objeto JSON contendo:
-1. "summaryText": um resumo motivacional curto do desempenho financeiro do mês e potencial de economia total estimado em R$.
-2. "tips": lista com 3 ou 4 dicas específicas. Cada dica deve ter:
-   - "title": título curto da dica (ex: "Reduzir Gastos com Delivery", "Otimizar Transporte", "Ajustar Assinaturas")
-   - "category": uma categoria ("Economia", "Oportunidade", "Alerta", "Meta")
-   - "description": explicação clara de 2-3 frases orientando a ação.
-   - "estimatedMonthlySavings": valor estimado em R$ de economia mensal que o usuário conseguirá se aplicar a dica (número positivo).
-   - "impact": "Alto", "Médio" ou "Baixo"`;
-
-      try {
-        const geminiRes = await client.models.generateContent({
-          model: 'gemini-flash-latest',
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                summaryText: { type: Type.STRING },
-                tips: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      title: { type: Type.STRING },
-                      category: { type: Type.STRING },
-                      description: { type: Type.STRING },
-                      estimatedMonthlySavings: { type: Type.NUMBER },
-                      impact: { type: Type.STRING },
-                    },
-                    required: ['title', 'category', 'description', 'estimatedMonthlySavings', 'impact'],
-                  },
-                },
-              },
-              required: ['summaryText', 'tips'],
-            },
-          },
-        });
-
-        if (geminiRes && geminiRes.text) {
-          const parsed = JSON.parse(geminiRes.text.trim());
-          if (parsed && parsed.summaryText && Array.isArray(parsed.tips)) {
-            return res.json({ success: true, source: 'ai', ...parsed });
-          }
-        }
-      } catch (aiError) {
-        console.error('AI API Error (Quota/Auth/Model) - Falling back to rule-engine:', aiError instanceof Error ? aiError.message : String(aiError));
-        if (aiError instanceof Error && aiError.message.includes('429')) {
-            lastQuotaExceededTime = Date.now();
-        }
-      }
-    }
-
-    // Fallback Smart Rule-Based Engine if no key or offline
+    const { incomeTotal, expenseTotal } = req.body;
+    
+    // Lógica simplificada de dicas financeiras (sem IA)
     const exp = Number(expenseTotal || 0);
     const inc = Number(incomeTotal || 0);
     const net = inc - exp;
     const estSavings = Math.max(50, Math.round(exp * 0.12));
 
-    const fallbackTips = [
+    const tips = [
       {
-        title: 'Otimização de Gastos do Mês',
+        title: 'Otimização de Gastos',
         category: 'Economia',
-        description: `Seus gastos no período somam ${exp > 0 ? 'R$ ' + exp.toFixed(2) : 'R$ 0,00'}. Revisando pequenas despesas não essenciais, é possível economizar cerca de 12% do seu orçamento mensal sem reduzir seu conforto.`,
+        description: 'Revisar pequenas despesas diárias pode aumentar sua economia mensal.',
         estimatedMonthlySavings: estSavings,
         impact: 'Alto',
       },
       {
-        title: 'Retenção para Reserva de Emergência',
+        title: 'Reserva de Emergência',
         category: 'Meta',
-        description: inc > 0 
-          ? `Sua receita do mês é de R$ ${inc.toFixed(2)}. Separar 15% (R$ ${(inc * 0.15).toFixed(2)}) logo no primeiro dia garante o crescimento consistente do seu patrimônio.`
-          : 'Cadastre suas receitas mensais para calcularmos a meta de retenção ideal para sua reserva de emergência.',
+        description: 'Tente reservar 15% da sua receita mensal para sua reserva de emergência.',
         estimatedMonthlySavings: Math.round(inc * 0.15) || 150,
         impact: 'Médio',
       },
       {
-        title: 'Tetos por Categoria',
+        title: 'Monitoramento de Gastos',
         category: 'Oportunidade',
-        description: 'Defina limites orçamentários para suas duas maiores categorias de gastos para eliminar vazamentos silenciosos de dinheiro.',
+        description: 'Definir tetos orçamentários por categoria ajuda a controlar gastos supérfluos.',
         estimatedMonthlySavings: 80,
         impact: 'Médio',
       },
@@ -491,18 +407,16 @@ Retorne um objeto JSON contendo:
     return res.json({
       success: true,
       source: 'rule-engine',
-      summaryText: net >= 0 
-        ? `Seu saldo está positivo em R$ ${net.toFixed(2)}. Aplicando as sugestões de IA abaixo, você pode economizar mais R$ ${estSavings + 80},00 este mês!`
-        : `Seu orçamento está com déficit de R$ ${Math.abs(net).toFixed(2)}. As sugestões da IA ajudarão a reequilibrar suas finanças imediatamente.`,
-      tips: fallbackTips,
+      summaryText: net >= 0
+        ? `Seu saldo positivo é um ótimo começo. Com ajustes simples, você pode economizar ainda mais!`
+        : `Gerenciar suas despesas é crucial para equilibrar seu orçamento. Pequenos cortes hoje trazem segurança amanhã.`,
+      tips: tips,
     });
   } catch (error) {
-    console.error('Error generating AI financial tips:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Falha desconhecida';
-    return res.status(500).json({ 
-      success: false, 
-      error: 'Falha ao gerar dicas financeiras',
-      details: errorMessage
+    console.error('Error generating financial tips:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Falha ao gerar dicas financeiras'
     });
   }
 });

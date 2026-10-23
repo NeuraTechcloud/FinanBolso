@@ -207,9 +207,9 @@ export const Header: React.FC<HeaderProps> = React.memo(({
             </button>
           ) : (
             <button
-              onClick={onSignIn}
+              onClick={() => (window as any)._openEmailAuthModal?.()}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition active:scale-95 shadow-lg shadow-emerald-500/20"
-              title="Entrar com Google"
+              title="Acessar Área de Login"
             >
               <Smartphone className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Acessar</span>

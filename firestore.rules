@@ -90,19 +90,12 @@ service cloud.firestore {
     }
 
     function isValidDevice(data) {
-      return data.keys().hasAll(['id', 'deviceId', 'name', 'plan', 'status', 'expiresAt']) &&
-             data.keys().hasOnly(['id', 'deviceId', 'name', 'email', 'plan', 'durationDays', 'activationId', 'status', 'expiresAt', 'managedAssetsValue', 'platform', 'resolution', 'userId', 'lastSeen']) &&
-             data.id is string &&
-             data.deviceId is string &&
-             data.name is string &&
-             data.plan is string &&
-             data.status in ['Ativo', 'Expirado'] &&
-             data.expiresAt is string;
+      return data.id is string && data.deviceId is string;
     }
 
     function isValidActivation(data) {
       return data.keys().hasAll(['key', 'durationDays', 'issuedAt']) &&
-             data.keys().hasOnly(['key', 'durationDays', 'issuedAt', 'label', 'usedBy', 'usedAt']) &&
+             data.keys().hasOnly(['key', 'durationDays', 'issuedAt', 'label', 'usedBy', 'usedAt', 'updatedAt']) &&
              data.key is string &&
              data.durationDays in [30, 365] &&
              data.issuedAt is number;
@@ -112,11 +105,6 @@ service cloud.firestore {
     // MATCH BLOCKS
     // -------------------------------------------------------------------------
 
-    // Default deny
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // Admins collection
     match /admins/{adminId} {
       allow read: if isSignedIn();
@@ -124,74 +112,74 @@ service cloud.firestore {
     }
 
     // User data
-    match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(incoming());
-      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming());
-      allow delete: if isAdmin();
+    match /users {
+      allow list: if isAdmin();
+      match /{userId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidUser(incoming());
+        allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming());
+        allow delete: if isAdmin();
 
-      match /transactions/{transactionId} {
-        allow read, list: if isOwner(userId) || isAdmin();
-        allow create: if (isOwner(userId) || isAdmin()) && isValidTransaction(incoming());
-        allow update: if (isOwner(userId) || isAdmin()) && isValidTransaction(incoming());
-        allow delete: if isOwner(userId) || isAdmin();
-      }
+        match /transactions/{transactionId} {
+          allow read, list: if isOwner(userId) || isAdmin();
+          allow create: if (isOwner(userId) || isAdmin()) && isValidTransaction(incoming());
+          allow update: if (isOwner(userId) || isAdmin()) && isValidTransaction(incoming());
+          allow delete: if isOwner(userId) || isAdmin();
+        }
 
-      match /categories/{categoryId} {
-        allow read, list: if isOwner(userId) || isAdmin();
-        allow create: if (isOwner(userId) || isAdmin()) && isValidCategory(incoming());
-        allow update: if (isOwner(userId) || isAdmin()) && isValidCategory(incoming());
-        allow delete: if isOwner(userId) || isAdmin();
-      }
+        match /categories/{categoryId} {
+          allow read, list: if isOwner(userId) || isAdmin();
+          allow create: if (isOwner(userId) || isAdmin()) && isValidCategory(incoming());
+          allow update: if (isOwner(userId) || isAdmin()) && isValidCategory(incoming());
+          allow delete: if isOwner(userId) || isAdmin();
+        }
 
-      match /savingsGoals/{goalId} {
-        allow read, list: if isOwner(userId) || isAdmin();
-        allow create: if (isOwner(userId) || isAdmin()) && isValidSavingsGoal(incoming());
-        allow update: if (isOwner(userId) || isAdmin()) && isValidSavingsGoal(incoming());
-        allow delete: if isOwner(userId) || isAdmin();
-      }
+        match /savingsGoals/{goalId} {
+          allow read, list: if isOwner(userId) || isAdmin();
+          allow create: if (isOwner(userId) || isAdmin()) && isValidSavingsGoal(incoming());
+          allow update: if (isOwner(userId) || isAdmin()) && isValidSavingsGoal(incoming());
+          allow delete: if isOwner(userId) || isAdmin();
+        }
 
-      match /reminders/{reminderId} {
-        allow read, list: if isOwner(userId) || isAdmin();
-        allow create: if (isOwner(userId) || isAdmin()) && isValidReminder(incoming());
-        allow update: if (isOwner(userId) || isAdmin()) && isValidReminder(incoming());
-        allow delete: if isOwner(userId) || isAdmin();
+        match /reminders/{reminderId} {
+          allow read, list: if isOwner(userId) || isAdmin();
+          allow create: if (isOwner(userId) || isAdmin()) && isValidReminder(incoming());
+          allow update: if (isOwner(userId) || isAdmin()) && isValidReminder(incoming());
+          allow delete: if isOwner(userId) || isAdmin();
+        }
       }
     }
 
     // Device registry
-    match /devices/{deviceId} {
-      // Allow read (get) if admin, or if the user is the owner, or if anonymous (to allow initial device sync)
-      // 'list' is strictly restricted to admins.
-      allow get: if true; 
+    match /devices {
       allow list: if isAdmin();
-      
-      // Allow creation and updates for device tracking
-      // If signed in, only the owner can update their device entry.
-      // If not signed in, anyone can update if they know the deviceId (legacy device-only mode).
-      allow create: if isValidDevice(incoming()) && (incoming().deviceId == deviceId || isAdmin());
-      allow update: if isAdmin() || (
-        isValidDevice(incoming()) && 
-        incoming().deviceId == deviceId && 
-        (existing().userId == null || existing().userId == request.auth.uid || !isSignedIn())
-      );
-      
-      allow delete: if isAdmin();
+      match /{deviceId} {
+        allow get: if isSignedIn();
+        allow write: if isSignedIn();
+        allow delete: if isAdmin();
+      }
     }
 
     // Activation keys
-    match /activations/{activationKey} {
-      allow read: if true; // Allow anyone to check if a key is valid (get)
+    match /activations {
       allow list: if isAdmin();
-      allow create: if isAdmin() && isValidActivation(incoming());
-      
-      // Allow users to "use" a key (update usedBy/usedAt)
-      allow update: if isAdmin() || (
-        isValidActivation(incoming()) &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['usedBy', 'usedAt', 'updatedAt'])
-      );
-      
-      allow delete: if isAdmin();
+      match /{activationKey} {
+        allow read: if true; // Allow anyone to check if a key is valid (get)
+        allow create: if isAdmin() && isValidActivation(incoming());
+        
+        // Allow users to "use" a key (update usedBy/usedAt)
+        allow update: if isAdmin() || (
+          isValidActivation(incoming()) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['usedBy', 'usedAt', 'updatedAt'])
+        );
+        
+        allow delete: if isAdmin();
+      }
+    }
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -8,6 +8,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { TransactionModal } from './components/TransactionModal';
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { ManagerPanelModal } from './components/ManagerPanelModal';
+import { EmailAuthModal } from './components/EmailAuthModal';
 import { HomeTab } from './components/tabs/HomeTab';
 import { ChartsTab } from './components/tabs/ChartsTab';
 import { TransactionsTab } from './components/tabs/TransactionsTab';
@@ -29,6 +30,7 @@ function AppContent() {
   const [subscription, setSubscription] = useState<UserSubscription>(() => StorageService.getSubscription());
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);
+  const [isEmailAuthModalOpen, setIsEmailAuthModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -60,9 +62,11 @@ function AppContent() {
   useEffect(() => {
     (window as any)._openSubscriptionModal = () => setIsSubscriptionModalOpen(true);
     (window as any)._openManagerModal = () => setIsManagerModalOpen(true);
+    (window as any)._openEmailAuthModal = () => setIsEmailAuthModalOpen(true);
     return () => {
       delete (window as any)._openSubscriptionModal;
       delete (window as any)._openManagerModal;
+      delete (window as any)._openEmailAuthModal;
     };
   }, []);
 
@@ -490,6 +494,11 @@ function AppContent() {
           onForceProGlobal={handleActivatePro}
           onResetSubscriptionGlobal={handleResetSubscription}
           subscription={subscription}
+        />
+        {/* Email Auth Modal */}
+        <EmailAuthModal
+          isOpen={isEmailAuthModalOpen}
+          onClose={() => setIsEmailAuthModalOpen(false)}
         />
       </div>
     </div>

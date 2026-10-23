@@ -58,6 +58,8 @@ export const ActivationService = {
       durationDays,
       issuedAt: Date.now(),
       label: label || `Emitido pelo ADM (${durationDays}d)`,
+      usedBy: null,
+      usedAt: null
     };
 
     try {
@@ -123,8 +125,41 @@ export const ActivationService = {
       const keyDoc = await getDoc(firestoreDoc(db, 'activations', id));
       if (keyDoc.exists()) {
         const data = keyDoc.data();
-        // Check if key is already used by another device (optional strictness)
-        // For now, let's allow it but record usage
+
+        // If already used by a DIFFERENT device, reject
+        if (data.usedBy && data.usedBy !== deviceId) {
+          return {
+            valid: false,
+            durationDays: 30,
+            planName: '',
+            activationId: id,
+            deviceId,
+            message: `Este código de ativação já foi utilizado no aparelho (${data.usedBy}).`,
+          };
+        }
+
+        // Mark key as used in Firestore
+        try {
+          await setDoc(firestoreDoc(db, 'activations', id), {
+            usedBy: deviceId,
+            usedAt: Date.now(),
+            updatedAt: Date.now()
+          }, { merge: true });
+        } catch (err) {
+          console.error('Error marking key as used in Firestore:', err);
+        }
+
+        // Update local cache
+        const localKeys = this.getAuthorizedKeys();
+        const match = localKeys.find(k => k.key.toUpperCase() === id);
+        if (match) {
+          (match as any).usedBy = deviceId;
+          (match as any).usedAt = Date.now();
+          try {
+            localStorage.setItem(STORAGE_AUTHORIZED_KEYS, JSON.stringify(localKeys));
+          } catch {}
+        }
+
         return {
           valid: true,
           durationDays: data.durationDays === 365 ? 365 : 30,

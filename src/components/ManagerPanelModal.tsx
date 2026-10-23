@@ -86,12 +86,10 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
-  // Auto-authenticate if the logged-in user is the admin email
+  // Removed auto-authentication for security
   useEffect(() => {
-    if (user?.email === 'bodygmr30@gmail.com') {
-      setIsAuthenticated(true);
-    }
-  }, [user]);
+    setIsAuthenticated(false);
+  }, []);
   
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
@@ -105,7 +103,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
   // Key generator state
-  const [generatedKeys, setGeneratedKeys] = useState<Array<{ id: string; key: string; duration: 30 | 365; createdAt: string }>>([]);
+  const [generatedKeys, setGeneratedKeys] = useState<Array<{ id: string; key: string; duration: 30 | 365; createdAt: string; usedBy?: string | null; usedAt?: number | null }>>([]);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Firestore Real-time Subscriptions
@@ -123,12 +121,38 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
 
     // Subscribe to Activation Keys
     const unsubKeys = FirestoreService.subscribeActivationKeys((keys) => {
-      setGeneratedKeys(keys.map((k, i) => ({
-        id: `key-${i}-${k.key}`,
-        key: k.key,
-        duration: k.durationDays,
-        createdAt: k.label || `Chave ${k.durationDays}d`,
-      })));
+      const localKeys = ActivationService.getAuthorizedKeys();
+      const keyMap = new Map<string, any>();
+
+      // Load local cache keys
+      localKeys.forEach((lk: any) => {
+        if (lk && lk.key) {
+          keyMap.set(lk.key.toUpperCase(), {
+            id: `key-local-${lk.key}`,
+            key: lk.key,
+            duration: lk.durationDays,
+            createdAt: lk.label || `Chave ${lk.durationDays}d`,
+            usedBy: lk.usedBy || null,
+            usedAt: lk.usedAt || null,
+          });
+        }
+      });
+
+      // Override with live Firestore keys
+      keys.forEach((k: any) => {
+        if (k && k.key) {
+          keyMap.set(k.key.toUpperCase(), {
+            id: `key-firestore-${k.key}`,
+            key: k.key,
+            duration: k.durationDays,
+            createdAt: k.label || `Chave ${k.durationDays}d`,
+            usedBy: k.usedBy || null,
+            usedAt: k.usedAt || null,
+          });
+        }
+      });
+
+      setGeneratedKeys(Array.from(keyMap.values()));
     });
 
     // Fetch Users
@@ -150,7 +174,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinInput === '2026' || pinInput === 'admin' || pinInput === '0000') {
+    if (user?.email === 'bodygmr30@gmail.com' && pinInput === '100393') {
       setIsAuthenticated(true);
       setPinError(false);
     } else {
@@ -166,9 +190,26 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   const handleGenerateKey = async (durationDays: 30 | 365) => {
     try {
       const key = await ActivationService.generateActivationId(durationDays);
-      navigator.clipboard.writeText(key);
+      
+      // Instantly add to state so key appears immediately in the UI
+      setGeneratedKeys(prev => [
+        {
+          id: `key-instant-${key}`,
+          key,
+          duration: durationDays,
+          createdAt: `Emitido pelo ADM (${durationDays}d)`,
+          usedBy: null,
+          usedAt: null
+        },
+        ...prev.filter(k => k.key.toUpperCase() !== key.toUpperCase())
+      ]);
+
+      try {
+        await navigator.clipboard.writeText(key);
+      } catch {}
+
       setCopiedKey(key);
-      showMsg(`✓ Chave ${durationDays} dias gerada e salva na nuvem!`);
+      showMsg(`✓ Chave ${durationDays} dias gerada, copiada e salva com sucesso!`);
       setTimeout(() => setCopiedKey(null), 3000);
     } catch (error) {
       showMsg("Erro ao gerar chave no servidor.");
@@ -309,6 +350,17 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
     
     // Refresh user list locally
     setAppUsers(appUsers.map(user => user.uid === u.uid ? { ...user, subscription: userSub } : user));
+  };
+
+  const handleDeleteUser = async (u: AppUser) => {
+    if (!window.confirm(`Deseja realmente excluir o usuário ${u.displayName || u.email}? Esta ação não pode ser desfeita.`)) return;
+    try {
+      await FirestoreService.deleteUser(u.uid);
+      showMsg(`✓ Usuário ${u.displayName || u.email} excluído com sucesso.`);
+      setAppUsers(appUsers.filter(user => user.uid !== u.uid));
+    } catch (err) {
+      showMsg(`Erro ao excluir usuário: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+    }
   };
 
   const handleRevokeUserPro = async (u: AppUser) => {
@@ -676,6 +728,12 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                                   Revogar
                                 </button>
                               )}
+                              <button 
+                                onClick={() => handleDeleteUser(u)}
+                                className="px-3 py-1.5 bg-red-900/20 hover:bg-red-900/40 text-red-500 text-[10px] font-bold rounded-lg border border-red-900/30 transition"
+                              >
+                                Excluir
+                              </button>
                             </div>
                           </div>
                         );
@@ -719,42 +777,48 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                         Nenhuma chave ativa disponível.
                       </div>
                     ) : (
-                      generatedKeys.map((k) => (
-                        <div key={k.id} className="p-3 flex items-center justify-between hover:bg-slate-900/50 transition">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-mono font-bold text-white">{k.key}</span>
-                              <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                                k.duration === 365 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'
-                              }`}>
-                                {k.duration}D
-                              </span>
+                      generatedKeys.map((k) => {
+                        // Assuming keys are fetched via subscribeActivationKeys and stored in generatedKeys
+                        // We need to access the key data to see usedBy
+                        const isUsed = !!k.usedBy;
+                        return (
+                          <div key={k.id} className="p-3 flex items-center justify-between hover:bg-slate-900/50 transition">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs font-mono font-bold ${isUsed ? 'text-slate-500 line-through' : 'text-white'}`}>{k.key}</span>
+                                <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                                  k.duration === 365 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'
+                                }`}>
+                                  {k.duration}D
+                                </span>
+                                {isUsed && <span className="text-[8px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-full">USADA</span>}
+                              </div>
+                              <p className="text-[9px] text-slate-500 truncate mt-0.5">{k.createdAt}</p>
                             </div>
-                            <p className="text-[9px] text-slate-500 truncate mt-0.5">{k.createdAt}</p>
+                            <div className="flex items-center gap-1.5">
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(k.key);
+                                  setCopiedKey(k.key);
+                                  showMsg(`Chave ${k.key} copiada!`);
+                                  setTimeout(() => setCopiedKey(null), 2000);
+                                }}
+                                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition"
+                                title="Copiar"
+                              >
+                                {copiedKey === k.key ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteGeneratedKey(k.key)}
+                                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 flex items-center justify-center transition"
+                                title="Excluir"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <button 
-                              onClick={() => {
-                                navigator.clipboard.writeText(k.key);
-                                setCopiedKey(k.key);
-                                showMsg(`Chave ${k.key} copiada!`);
-                                setTimeout(() => setCopiedKey(null), 2000);
-                              }}
-                              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition"
-                              title="Copiar"
-                            >
-                              {copiedKey === k.key ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteGeneratedKey(k.key)}
-                              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 flex items-center justify-center transition"
-                              title="Excluir"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

@@ -51,6 +51,12 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     operationType,
     path
   };
+
+  if (errInfo.error.toLowerCase().includes('permission')) {
+    console.warn('Firestore Permission Denied: ', path);
+    return;
+  }
+
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
@@ -245,10 +251,18 @@ export const FirestoreService = {
   async registerDevice(deviceId: string, data: any) {
     const path = `devices`;
     try {
-      await setDoc(doc(db, path, deviceId), {
+      // Fetch existing to ensure we have all required fields for isValidDevice
+      const existingDoc = await getDoc(doc(db, path, deviceId));
+      const existingData = existingDoc.exists() ? existingDoc.data() : {};
+      
+      const mergedData = {
+        id: deviceId,
+        ...existingData,
         ...this.cleanData(data),
         lastSeen: Date.now()
-      }, { merge: true });
+      };
+
+      await setDoc(doc(db, path, deviceId), mergedData);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `${path}/${deviceId}`);
     }
@@ -319,6 +333,15 @@ export const FirestoreService = {
       },
       (error) => handleFirestoreError(error, OperationType.LIST, path)
     );
+  },
+
+  async deleteUser(userId: string) {
+    const path = `users`;
+    try {
+      await deleteDoc(doc(db, path, userId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `${path}/${userId}`);
+    }
   },
 
   // --- Batch Upload (Migration) ---
