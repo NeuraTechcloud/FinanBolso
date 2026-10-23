@@ -206,7 +206,7 @@ export const ActivationService = {
         activationId: subscription.activationId,
         status: 'Ativo' as const,
         expiresAt: new Date(subscription.expiresAt).toISOString().slice(0, 10),
-        managedAssetsValue: existingIdx >= 0 ? subs[existingIdx].managedAssetsValue : 35000.00,
+        managedAssetsValue: existingIdx >= 0 ? subs[existingIdx].managedAssetsValue : 0.00,
       };
 
       if (existingIdx >= 0) {
@@ -227,6 +227,9 @@ export const ActivationService = {
       const planName = subscription.isPro ? subscription.planName : 'Gratuito';
       const activationId = subscription.activationId || (subscription.isPro ? 'PRO-ACTIVE' : 'FREE-DEVICE');
 
+      const userGoals = StorageService.getSavingsGoals();
+      const userAssets = userGoals.reduce((sum, g) => sum + (g.currentAmount || 0), 0);
+
       const entry = {
         id: deviceId,
         deviceId,
@@ -237,7 +240,7 @@ export const ActivationService = {
         activationId,
         status: 'Ativo' as const,
         expiresAt: subscription.expiresAt ? new Date(subscription.expiresAt).toISOString().slice(0, 10) : '2027-12-31',
-        managedAssetsValue: 25000.00,
+        managedAssetsValue: userAssets,
         platform: devInfo.platform,
         resolution: devInfo.screenResolution,
       };

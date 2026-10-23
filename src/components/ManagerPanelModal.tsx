@@ -123,6 +123,9 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
 
         const devInfo = StorageService.getDeviceInfo();
         const currentSub = StorageService.getSubscription();
+        const userGoals = StorageService.getSavingsGoals();
+        const userAssets = userGoals.reduce((sum, g) => sum + (g.currentAmount || 0), 0);
+
         const currentEntry = {
           id: devInfo.deviceId,
           deviceId: devInfo.deviceId,
@@ -133,7 +136,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
           activationId: currentSub.activationId || (currentSub.isPro ? 'PRO-ACTIVE' : 'FREE-DEVICE'),
           status: 'Ativo' as const,
           expiresAt: currentSub.expiresAt ? new Date(currentSub.expiresAt).toISOString().slice(0, 10) : '2027-12-31',
-          managedAssetsValue: 35000.00,
+          managedAssetsValue: userAssets,
           platform: devInfo.platform,
           resolution: devInfo.screenResolution,
         };
