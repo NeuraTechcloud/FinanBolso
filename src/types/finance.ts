@@ -168,5 +168,15 @@ export const INITIAL_REMINDERS: Reminder[] = [
     paymentMethod: 'credit_card'
   }
 ];
+export type SubscriptionPlanType = 'monthly' | 'yearly';
 
-
+export interface UserSubscription {
+  isPro: boolean;
+  planName: string;
+  planType?: SubscriptionPlanType;
+  durationDays: number; // 30 or 365
+  activationId?: string; // unique activation ID
+  deviceId?: string; // unique device identifier
+  activatedAt?: number;
+  expiresAt: number;
+}

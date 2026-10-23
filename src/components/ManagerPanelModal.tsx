@@ -13,17 +13,26 @@ import {
   Award,
   DollarSign,
   Smartphone,
-  Lock
+  Lock,
+  Copy,
+  Check,
+  CreditCard,
+  Sparkles,
+  Fingerprint
 } from 'lucide-react';
 import { PaymentIntegrationGuide } from './PaymentIntegrationGuide';
-import { CreditCard } from 'lucide-react';
-import { formatBRL } from '../services/exportService';
+import { formatBRL, formatDateBR } from '../services/exportService';
+import { UserSubscription } from '../types/finance';
+import { ActivationService } from '../services/activationService';
+import { StorageService } from '../services/storage';
 
 interface Subscriber {
   id: string;
   name: string;
   email: string;
   plan: 'Pro Mensal' | 'Pro Anual' | 'Enterprise' | 'Gratuito';
+  durationDays?: 30 | 365;
+  activationId?: string;
   status: 'Ativo' | 'Pendente' | 'Expirado';
   expiresAt: string;
   managedAssetsValue: number;
@@ -32,24 +41,60 @@ interface Subscriber {
 interface ManagerPanelModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onForceProGlobal: (planName: string) => void;
-  currentIsPro: boolean;
-  currentPlanName: string;
+  onForceProGlobal: (planName: string, durationDays: 30 | 365, activationId?: string) => void;
+  subscription: UserSubscription;
 }
 
 const INITIAL_SUBSCRIBERS: Subscriber[] = [
-  { id: 'sub-1', name: 'Carlos Eduardo (Você - Gestor)', email: 'carlos@finanbolso.app', plan: 'Pro Anual', status: 'Ativo', expiresAt: '2027-12-31', managedAssetsValue: 142500.00 },
-  { id: 'sub-2', name: 'Mariana Souza', email: 'mariana.souza@gmail.com', plan: 'Pro Mensal', status: 'Ativo', expiresAt: '2026-05-15', managedAssetsValue: 48900.00 },
-  { id: 'sub-3', name: 'Roberto Alcantara', email: 'roberto.invest@outlook.com', plan: 'Enterprise', status: 'Ativo', expiresAt: '2027-01-10', managedAssetsValue: 850000.00 },
-  { id: 'sub-4', name: 'Juliana Mendes', email: 'ju.mendes@yahoo.com.br', plan: 'Gratuito', status: 'Expirado', expiresAt: '2026-01-01', managedAssetsValue: 12400.00 },
+  { 
+    id: 'sub-1', 
+    name: 'Carlos Eduardo (Você - Gestor)', 
+    email: 'carlos@finanbolso.app', 
+    plan: 'Pro Anual', 
+    durationDays: 365,
+    activationId: 'PRO-365D-MSTR-2026',
+    status: 'Ativo', 
+    expiresAt: '2027-12-31', 
+    managedAssetsValue: 142500.00 
+  },
+  { 
+    id: 'sub-2', 
+    name: 'Mariana Souza', 
+    email: 'mariana.souza@gmail.com', 
+    plan: 'Pro Mensal', 
+    durationDays: 30,
+    activationId: 'PRO-30D-MARI-8411',
+    status: 'Ativo', 
+    expiresAt: '2026-05-15', 
+    managedAssetsValue: 48900.00 
+  },
+  { 
+    id: 'sub-3', 
+    name: 'Roberto Alcantara', 
+    email: 'roberto.invest@outlook.com', 
+    plan: 'Enterprise', 
+    durationDays: 365,
+    activationId: 'PRO-365D-ROBT-9902',
+    status: 'Ativo', 
+    expiresAt: '2027-01-10', 
+    managedAssetsValue: 850000.00 
+  },
+  { 
+    id: 'sub-4', 
+    name: 'Juliana Mendes', 
+    email: 'ju.mendes@yahoo.com.br', 
+    plan: 'Gratuito', 
+    status: 'Expirado', 
+    expiresAt: '2026-01-01', 
+    managedAssetsValue: 12400.00 
+  },
 ];
 
 export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   isOpen,
   onClose,
   onForceProGlobal,
-  currentIsPro,
-  currentPlanName,
+  subscription,
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState('');
@@ -64,7 +109,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
     }
   });
 
-  const [activeTab, setActiveTab] = useState<'subscribers' | 'assets' | 'gateway'>('subscribers');
+  const [activeTab, setActiveTab] = useState<'subscribers' | 'keygen' | 'assets' | 'gateway'>('subscribers');
   
   // New subscriber form state
   const [newSubName, setNewSubName] = useState('');
@@ -72,6 +117,17 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   const [newSubPlan, setNewSubPlan] = useState<'Pro Mensal' | 'Pro Anual' | 'Enterprise' | 'Gratuito'>('Pro Mensal');
   const [newSubAssets, setNewSubAssets] = useState('');
   const [successToast, setSuccessToast] = useState<string | null>(null);
+
+  // Key generator state
+  const [generatedKeys, setGeneratedKeys] = useState<Array<{ id: string; key: string; duration: 30 | 365; createdAt: string }>>(() => {
+    return ActivationService.getAuthorizedKeys().map((k, i) => ({
+      id: `key-${i}-${k.key}`,
+      key: k.key,
+      duration: k.durationDays,
+      createdAt: k.label || `Chave ${k.durationDays}d`,
+    }));
+  });
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -81,7 +137,6 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Default manager PIN is 2026 or admin
     if (pinInput === '2026' || pinInput === 'admin' || pinInput === '0000') {
       setIsAuthenticated(true);
       setPinError(false);
@@ -95,17 +150,38 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
     setTimeout(() => setSuccessToast(null), 3500);
   };
 
+  const handleGenerateKey = (durationDays: 30 | 365) => {
+    const key = ActivationService.generateActivationId(durationDays);
+    const newEntry = {
+      id: `gen-${Date.now()}`,
+      key,
+      duration: durationDays,
+      createdAt: new Date().toLocaleTimeString(),
+    };
+    setGeneratedKeys([newEntry, ...generatedKeys]);
+    navigator.clipboard.writeText(key);
+    setCopiedKey(key);
+    showMsg(`✓ Chave ${durationDays} dias gerada e copiada: ${key}`);
+    setTimeout(() => setCopiedKey(null), 3000);
+  };
+
   const handleAddSubscriber = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubName.trim()) return;
+
+    const durationDays: 30 | 365 = newSubPlan === 'Pro Mensal' ? 30 : 365;
+    const activationId = ActivationService.generateActivationId(durationDays);
+    const expireTimestamp = Date.now() + 1000 * 60 * 60 * 24 * durationDays;
 
     const newSub: Subscriber = {
       id: `sub-${Date.now()}`,
       name: newSubName.trim(),
       email: newSubEmail.trim() || 'cliente@finanbolso.app',
       plan: newSubPlan,
+      durationDays,
+      activationId,
       status: newSubPlan === 'Gratuito' ? 'Expirado' : 'Ativo',
-      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365).toISOString().slice(0, 10),
+      expiresAt: new Date(expireTimestamp).toISOString().slice(0, 10),
       managedAssetsValue: parseFloat(newSubAssets) || 15000.00,
     };
 
@@ -114,7 +190,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
     setNewSubName('');
     setNewSubEmail('');
     setNewSubAssets('');
-    showMsg(`Assinante ${newSub.name} cadastrado com sucesso!`);
+    showMsg(`Assinante ${newSub.name} cadastrado com ID ${activationId}!`);
   };
 
   const handleToggleStatus = (id: string) => {
@@ -147,6 +223,8 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
     return acc;
   }, 0);
 
+  const remainingDays = ActivationService.calculateRemainingDays(subscription.expiresAt);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in">
       <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
@@ -164,7 +242,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                   Admin Master
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">Gerenciamento de planos ativos, assinaturas e ativos sob custódia</p>
+              <p className="text-xs text-slate-400">Gerenciamento de licenças 30d/365d, assinantes e ativos</p>
             </div>
           </div>
 
@@ -185,21 +263,21 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
             <div className="text-center space-y-1 max-w-sm">
               <h3 className="text-base font-bold text-white">Área Restrita do Gestor</h3>
               <p className="text-xs text-slate-400">
-                Insira a senha de acesso administrativo para gerenciar os planos, assinantes e ativos do sistema. (Dica: digite <span className="text-emerald-400 font-mono font-bold">2026</span>)
+                Insira a senha de acesso administrativo para gerenciar os planos, assinantes e chaves do sistema.
               </p>
             </div>
 
             <form onSubmit={handleLogin} className="w-full max-w-xs space-y-3">
               <input
                 type="password"
-                placeholder="Senha PIN (ex: 2026)"
+                placeholder="Digite a Senha de Acesso"
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 autoFocus
                 className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-center text-white text-sm font-mono tracking-widest focus:outline-none focus:border-emerald-500 transition"
               />
               {pinError && (
-                <p className="text-xs text-red-400 text-center font-semibold">Senha incorreta. Tente 2026.</p>
+                <p className="text-xs text-red-400 text-center font-semibold">Senha incorreta. Acesso negado.</p>
               )}
               <button
                 type="submit"
@@ -260,40 +338,108 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
               </div>
             </div>
 
-            {/* Quick Master License Action for this Device */}
-            <div className="p-3.5 bg-slate-950/90 border border-emerald-500/30 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                  <Smartphone className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="font-bold text-white flex items-center gap-2">
-                    <span>Licença deste Aparelho:</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                      currentIsPro 
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
-                        : 'bg-slate-800 text-slate-400 border border-slate-700'
-                    }`}>
-                      {currentIsPro ? `Pro Ativo (${currentPlanName})` : 'Plano Gratuito'}
-                    </span>
+            {/* Device Pro License Quick Activation (30d and 365d) */}
+            {/* Device Pro License & Hardware Identification (30d and 365d) */}
+            <div className="p-4 bg-slate-950/90 border border-emerald-500/30 rounded-2xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                    <Smartphone className="w-5 h-5" />
                   </div>
-                  <p className="text-[11px] text-slate-400">Ative ou renove os recursos Pro instantaneamente com permissão Master</p>
+                  <div>
+                    <div className="font-bold text-white text-xs flex items-center gap-2">
+                      <span>Status do Aparelho Atual:</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                        subscription.isPro 
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                          : 'bg-slate-800 text-slate-400 border border-slate-700'
+                      }`}>
+                        {subscription.isPro ? `Pro Ativo (${subscription.planName})` : 'Plano Gratuito'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      {subscription.isPro ? (
+                        <span>
+                          {remainingDays} dias restantes • Licença:{' '}
+                          <strong className="text-emerald-400 font-mono">{subscription.activationId || 'N/A'}</strong>
+                        </span>
+                      ) : (
+                        'Nenhuma licença Pro vinculada a este aparelho.'
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Instant Buttons to activate 30 days or 365 days */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = ActivationService.generateActivationId(30);
+                      onForceProGlobal('Pro Mensal (Admin Master)', 30, id);
+                      showMsg(`✓ Licença Pro de 30 Dias ativada com ID: ${id}`);
+                    }}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition active:scale-95 flex items-center gap-1.5 shadow"
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    <span>Ativar 30 Dias</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = ActivationService.generateActivationId(365);
+                      onForceProGlobal('Pro Anual (Admin Master)', 365, id);
+                      showMsg(`✓ Licença Pro de 365 Dias ativada com ID: ${id}`);
+                    }}
+                    className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition active:scale-95 shadow-md shadow-emerald-500/20 flex items-center gap-1.5"
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    <span>Ativar 365 Dias</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onForceProGlobal('Pro Anual (Admin Master)');
-                    showMsg('Licença Pro Anual Master ativada neste dispositivo!');
-                  }}
-                  className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition active:scale-95 shadow-md shadow-emerald-500/20 flex items-center gap-1.5"
-                >
-                  <Award className="w-3.5 h-3.5" />
-                  <span>{currentIsPro ? 'Renovar Pro Master (1 Ano)' : 'Ativar Pro Neste Aparelho'}</span>
-                </button>
-              </div>
+              {/* Hardware Device Identification Sub-Box */}
+              {(() => {
+                const devInfo = StorageService.getDeviceInfo();
+                const activeDevId = subscription.deviceId || devInfo.deviceId;
+                return (
+                  <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1.5">
+                        <Fingerprint className="w-3.5 h-3.5 text-emerald-400" />
+                        ID Único deste Aparelho (Hardware):
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Identificado & Registrado
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
+                      <span className="font-mono text-emerald-400 text-xs font-bold tracking-wider select-all">
+                        {activeDevId}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(activeDevId);
+                          showMsg('✓ ID do aparelho copiado para a área de transferência!');
+                        }}
+                        className="text-[11px] text-slate-300 hover:text-white px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 flex items-center gap-1 transition"
+                      >
+                        <Copy className="w-3 h-3 text-slate-400" />
+                        <span>Copiar</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+                      <span>Plataforma: <strong className="text-slate-300">{devInfo.platform}</strong></span>
+                      <span>Resolução: <strong className="text-slate-300">{devInfo.screenResolution}</strong></span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Navigation Tabs */}
@@ -306,6 +452,15 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
               >
                 <Users className="w-3.5 h-3.5" />
                 <span>Assinantes</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('keygen')}
+                className={`flex-1 py-2 px-2.5 rounded-xl font-semibold transition flex items-center justify-center gap-1.5 ${
+                  activeTab === 'keygen' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Gerador de IDs (30d/365d)</span>
               </button>
               <button
                 onClick={() => setActiveTab('assets')}
@@ -323,7 +478,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                 }`}
               >
                 <CreditCard className="w-3.5 h-3.5" />
-                <span>Guia Gateway Pix</span>
+                <span>Guia Gateway</span>
               </button>
             </div>
 
@@ -360,9 +515,9 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                       onChange={(e: any) => setNewSubPlan(e.target.value)}
                       className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
                     >
-                      <option value="Pro Mensal">Plano Pro Mensal (R$ 29,90/mês)</option>
-                      <option value="Pro Anual">Plano Pro Anual (R$ 199,90/ano)</option>
-                      <option value="Enterprise">Plano Enterprise (R$ 99,90/mês)</option>
+                      <option value="Pro Mensal">Plano Pro Mensal (30 Dias)</option>
+                      <option value="Pro Anual">Plano Pro Anual (365 Dias)</option>
+                      <option value="Enterprise">Plano Enterprise</option>
                       <option value="Gratuito">Plano Gratuito</option>
                     </select>
                     <input
@@ -378,7 +533,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                     className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>Cadastrar e Ativar Licença</span>
+                    <span>Cadastrar Assinante e Emitir ID</span>
                   </button>
                 </form>
 
@@ -405,9 +560,14 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                               {sub.status}
                             </span>
                           </div>
-                          <div className="text-[11px] text-slate-400 flex items-center gap-3">
+                          <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-2">
                             <span>{sub.email}</span>
                             <span className="text-emerald-400 font-semibold">• {sub.plan}</span>
+                            {sub.activationId && (
+                              <span className="text-[10px] font-mono text-slate-300 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                                ID: {sub.activationId}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -435,7 +595,95 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
               </div>
             )}
 
-            {/* Tab 2: Asset Management (AUM) */}
+            {/* Tab: Key Generator (30d and 365d) */}
+            {activeTab === 'keygen' && (
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                  <div>
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      Gerador de Chaves / IDs de Ativação
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Gere códigos únicos de ativação de 30 dias ou 365 dias para fornecer aos clientes ou testar no app.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateKey(30)}
+                      className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 active:scale-95 shadow"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                      <span>Gerar ID 30 Dias</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateKey(365)}
+                      className="p-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-emerald-500/20"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                      <span>Gerar ID 365 Dias</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* List of generated keys */}
+                <div className="space-y-2.5">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Chaves Emitidas Recentemente ({generatedKeys.length})
+                  </h4>
+
+                  <div className="space-y-2">
+                    {generatedKeys.map((k) => (
+                      <div
+                        key={k.id}
+                        className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="font-mono font-bold text-white flex items-center gap-2">
+                            <span>{k.key}</span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-sans font-bold ${
+                              k.duration === 365 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-blue-500/20 text-blue-300'
+                            }`}>
+                              {k.duration} dias
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500">Emitido: {k.createdAt}</div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(k.key);
+                            setCopiedKey(k.key);
+                            showMsg(`Chave ${k.key} copiada!`);
+                            setTimeout(() => setCopiedKey(null), 2500);
+                          }}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 active:scale-95"
+                        >
+                          {copiedKey === k.key ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Copiado</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>Copiar</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: Asset Management (AUM) */}
             {activeTab === 'assets' && (
               <div className="space-y-4">
                 <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-xs text-slate-300 space-y-2">
@@ -474,7 +722,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
               </div>
             )}
 
-            {/* Tab 3: Gateway Technical Integration Guide */}
+            {/* Tab 4: Gateway Technical Integration Guide */}
             {activeTab === 'gateway' && <PaymentIntegrationGuide />}
 
           </div>

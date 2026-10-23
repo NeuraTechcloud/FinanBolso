@@ -3,6 +3,7 @@ import {
   Category, 
   SavingsGoal, 
   Reminder,
+  UserSubscription,
   DEFAULT_CATEGORIES, 
   INITIAL_SAVINGS_GOALS,
   INITIAL_REMINDERS
@@ -386,12 +387,64 @@ export const StorageService = {
     this.saveReminders([]);
   },
 
-  exportBackupJSON(): string {
-    let deviceId = localStorage.getItem('finanbolso_device_id');
-    if (!deviceId) {
-      deviceId = `device-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      localStorage.setItem('finanbolso_device_id', deviceId);
+  // Unique Device Identifier (Hardware & Browser binding)
+  getDeviceId(): string {
+    try {
+      let id = localStorage.getItem('finanbolso_device_id_v2');
+      if (!id) {
+        // Upgrade from legacy key or generate a unique persistent hardware format
+        const legacy = localStorage.getItem('finanbolso_device_id');
+        if (legacy && legacy.startsWith('DEV-BR-')) {
+          id = legacy;
+        } else {
+          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+          const rand = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+          id = `DEV-BR-${rand()}-${rand()}`;
+        }
+        localStorage.setItem('finanbolso_device_id_v2', id);
+        localStorage.setItem('finanbolso_device_id', id);
+      }
+      return id;
+    } catch {
+      return 'DEV-BR-LOCAL-0001';
     }
+  },
+
+  // Extended Device Information & Fingerprint
+  getDeviceInfo(): {
+    deviceId: string;
+    platform: string;
+    screenResolution: string;
+    isIdentified: boolean;
+    status: string;
+  } {
+    const deviceId = this.getDeviceId();
+    let platform = 'Navegador Web';
+    if (typeof navigator !== 'undefined') {
+      const ua = navigator.userAgent || '';
+      if (/Android/i.test(ua)) platform = 'Smartphone Android';
+      else if (/iPhone/i.test(ua)) platform = 'Apple iPhone (iOS)';
+      else if (/iPad/i.test(ua)) platform = 'Apple iPad';
+      else if (/Windows/i.test(ua)) platform = 'Windows PC';
+      else if (/Macintosh|Mac OS/i.test(ua)) platform = 'Apple Mac';
+      else if (/Linux/i.test(ua)) platform = 'Sistema Linux';
+    }
+
+    const screenResolution = typeof window !== 'undefined' && window.screen
+      ? `${window.screen.width}x${window.screen.height} px`
+      : '1080x2400 px';
+
+    return {
+      deviceId,
+      platform,
+      screenResolution,
+      isIdentified: true,
+      status: 'Aparelho Identificado & Registrado',
+    };
+  },
+
+  exportBackupJSON(): string {
+    const deviceId = this.getDeviceId();
     const backup = {
       version: 2,
       appName: 'FinanBolso',
@@ -431,25 +484,38 @@ export const StorageService = {
     }
   },
 
-  getSubscription(): { isPro: boolean; planName: string; expiresAt: number } {
+  getSubscription(): UserSubscription {
     try {
+      const currentDeviceId = this.getDeviceId();
       const data = localStorage.getItem('finanbolso_subscription_v1');
-      if (!data) return { isPro: false, planName: 'Gratuito', expiresAt: 0 };
-      const parsed = JSON.parse(data);
+      if (!data) return { isPro: false, planName: 'Gratuito', durationDays: 0, expiresAt: 0, deviceId: currentDeviceId };
+      const parsed: UserSubscription = JSON.parse(data);
+      if (!parsed.deviceId) {
+        parsed.deviceId = currentDeviceId;
+      }
       // Auto-expire check when subscription timestamp has passed
       if (parsed.isPro && parsed.expiresAt > 0 && parsed.expiresAt < Date.now()) {
-        const expired = { isPro: false, planName: 'Expirado', expiresAt: parsed.expiresAt };
+        const expired: UserSubscription = { 
+          ...parsed,
+          isPro: false, 
+          planName: 'Expirado', 
+          expiresAt: parsed.expiresAt,
+          deviceId: currentDeviceId
+        };
         this.saveSubscription(expired);
         return expired;
       }
       return parsed;
     } catch (e) {
-      return { isPro: false, planName: 'Gratuito', expiresAt: 0 };
+      return { isPro: false, planName: 'Gratuito', durationDays: 0, expiresAt: 0, deviceId: this.getDeviceId() };
     }
   },
 
-  saveSubscription(sub: { isPro: boolean; planName: string; expiresAt: number }): void {
+  saveSubscription(sub: UserSubscription): void {
     try {
+      if (!sub.deviceId) {
+        sub.deviceId = this.getDeviceId();
+      }
       localStorage.setItem('finanbolso_subscription_v1', JSON.stringify(sub));
     } catch (e) {}
   }

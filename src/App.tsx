@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StorageService } from './services/storage';
-import { Transaction, Category, SavingsGoal, QuickPreset, TransactionType, Reminder } from './types/finance';
+import { Transaction, Category, SavingsGoal, QuickPreset, TransactionType, Reminder, UserSubscription } from './types/finance';
+import { ActivationService } from './services/activationService';
 import { Header } from './components/Header';
 import { BottomNav, TabType } from './components/BottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -22,7 +23,7 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [subscription, setSubscription] = useState<{ isPro: boolean; planName: string; expiresAt: number }>(() => StorageService.getSubscription());
+  const [subscription, setSubscription] = useState<UserSubscription>(() => StorageService.getSubscription());
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
@@ -164,16 +165,14 @@ export default function App() {
     StorageService.saveReminders(newReminders);
   };
 
-  // Activate Pro Subscription
-  const handleActivatePro = (planName: string) => {
-    const newSub = {
-      isPro: true,
-      planName,
-      expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 365,
-    };
+  // Activate Pro Subscription with duration (30 or 365 days) and distinct activationId
+  const handleActivatePro = (planName: string, durationDays: 30 | 365 = 365, activationId?: string) => {
+    const days: 30 | 365 = durationDays === 30 ? 30 : 365;
+    const newSub = ActivationService.buildSubscription(days, activationId);
+    newSub.planName = planName;
     setSubscription(newSub);
     StorageService.saveSubscription(newSub);
-    showToast(`✓ Assinatura ${planName} ativada com sucesso!`);
+    showToast(`✓ Plano Pro (${days} Dias) Ativado! ID: ${newSub.activationId}`);
   };
 
   // Open modal for editing
@@ -244,6 +243,7 @@ export default function App() {
             onTogglePhoneFrame={() => setIsPhoneFrame(!isPhoneFrame)}
             isPro={subscription.isPro}
             expiresAt={subscription.expiresAt}
+            activationId={subscription.activationId}
           />
         </div>
 
@@ -349,7 +349,7 @@ export default function App() {
         <SubscriptionModal
           isOpen={isSubscriptionModalOpen}
           onClose={() => setIsSubscriptionModalOpen(false)}
-          isProActive={subscription.isPro}
+          subscription={subscription}
           onActivatePro={handleActivatePro}
         />
 
@@ -358,8 +358,7 @@ export default function App() {
           isOpen={isManagerModalOpen}
           onClose={() => setIsManagerModalOpen(false)}
           onForceProGlobal={handleActivatePro}
-          currentIsPro={subscription.isPro}
-          currentPlanName={subscription.planName}
+          subscription={subscription}
         />
       </div>
     </div>

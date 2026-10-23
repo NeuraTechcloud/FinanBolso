@@ -20,6 +20,7 @@ interface HeaderProps {
   onTogglePhoneFrame: () => void;
   isPro?: boolean;
   expiresAt?: number;
+  activationId?: string;
 }
 
 const MONTH_NAMES = [
@@ -34,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
   onTogglePhoneFrame,
   isPro = false,
   expiresAt = 0,
+  activationId,
 }) => {
   const remainingDays = isPro && expiresAt ? Math.max(0, Math.ceil((expiresAt - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
   const isWarningNearExpiry = isPro && remainingDays <= 5;
@@ -122,7 +124,11 @@ export const Header: React.FC<HeaderProps> = ({
                       ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 animate-bounce shadow-lg shadow-amber-500/20'
                       : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
                   }`}
-                  title={isWarningNearExpiry ? 'Atenção: Assinatura vence em poucos dias! Clique para renovar' : `Plano Pro Ativo por mais ${remainingDays} dias`}
+                  title={
+                    isWarningNearExpiry 
+                      ? `Atenção: Assinatura vence em ${remainingDays} dias! Clique para renovar${activationId ? ` (ID: ${activationId})` : ''}` 
+                      : `Plano Pro Ativo por mais ${remainingDays} dias${activationId ? ` • ID: ${activationId}` : ''}`
+                  }
                 >
                   <Crown className={`w-3 h-3 ${isWarningNearExpiry ? 'text-amber-400 animate-pulse' : 'text-amber-300'}`} />
                   <span>{isWarningNearExpiry ? `⚠️ ${remainingDays}d (Renove!)` : `${remainingDays}d Pro`}</span>

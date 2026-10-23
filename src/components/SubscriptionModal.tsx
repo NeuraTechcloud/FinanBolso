@@ -1,30 +1,63 @@
 import React, { useState } from 'react';
-import { X, Crown, CheckCircle2, Sparkles, Shield, Zap, Copy, QrCode, ArrowRight, Award } from 'lucide-react';
+import { 
+  X, 
+  Crown, 
+  CheckCircle2, 
+  Sparkles, 
+  Zap, 
+  Copy, 
+  QrCode, 
+  Award, 
+  KeyRound, 
+  AlertCircle, 
+  Calendar, 
+  ShieldCheck,
+  Check,
+  Smartphone,
+  Fingerprint,
+  CheckCheck
+} from 'lucide-react';
 import { motion } from 'motion/react';
 import { PaymentService, PaymentPreferenceResponse } from '../services/paymentService';
-import { formatBRL } from '../services/exportService';
+import { ActivationService } from '../services/activationService';
+import { StorageService } from '../services/storage';
+import { formatBRL, formatDateBR } from '../services/exportService';
+import { UserSubscription } from '../types/finance';
 
 interface SubscriptionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  isProActive: boolean;
-  onActivatePro: (planName: string) => void;
+  subscription: UserSubscription;
+  onActivatePro: (planName: string, durationDays: 30 | 365, activationId?: string) => void;
 }
 
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   isOpen,
   onClose,
-  isProActive,
+  subscription,
   onActivatePro,
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
   const [isProcessing, setIsProcessing] = useState(false);
   const [pixData, setPixData] = useState<PaymentPreferenceResponse | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedPix, setCopiedPix] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+  const [copiedDeviceId, setCopiedDeviceId] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const deviceInfo = StorageService.getDeviceInfo();
+  const activeDeviceId = subscription.deviceId || deviceInfo.deviceId;
+
+  // Manual Activation Code State
+  const [manualCode, setManualCode] = useState('');
+  const [isValidatingCode, setIsValidatingCode] = useState(false);
+  const [codeFeedback, setCodeFeedback] = useState<{ success: boolean; message: string } | null>(null);
 
   if (!isOpen) return null;
 
+  const remainingDays = ActivationService.calculateRemainingDays(subscription.expiresAt);
+
+  // Start Pix Checkout Preference
   const handleStartCheckout = async () => {
     setIsProcessing(true);
     const res = await PaymentService.createCheckoutPreference(selectedPlan);
@@ -33,38 +66,90 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     if (res.success && res.pixCopyPaste) {
       setPixData(res);
     } else {
-      // Direct activation fallback if server route error
-      const name = selectedPlan === 'yearly' ? 'Pro Anual (FinanBolso)' : 'Pro Mensal (FinanBolso)';
-      onActivatePro(name);
-      setSuccessMsg('Parabéns! Sua assinatura Pro foi ativada com sucesso!');
+      // Direct activation fallback if offline or server route error
+      const durationDays: 30 | 365 = selectedPlan === 'yearly' ? 365 : 30;
+      const planName = durationDays === 365 ? 'Pro Anual (365 Dias)' : 'Pro Mensal (30 Dias)';
+      const generatedId = ActivationService.generateActivationId(durationDays);
+      onActivatePro(planName, durationDays, generatedId);
+      setSuccessMsg(`Parabéns! Sua assinatura ${planName} foi ativada com o ID: ${generatedId}`);
       setTimeout(() => {
         setSuccessMsg(null);
         onClose();
-      }, 2500);
+      }, 3000);
     }
   };
 
   const handleCopyPix = () => {
     if (pixData?.pixCopyPaste) {
       navigator.clipboard.writeText(pixData.pixCopyPaste);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      setCopiedPix(true);
+      setTimeout(() => setCopiedPix(false), 2500);
     }
   };
 
+  const handleCopyActiveId = () => {
+    if (subscription.activationId) {
+      navigator.clipboard.writeText(subscription.activationId);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2500);
+    }
+  };
+
+  const handleCopyDeviceId = () => {
+    navigator.clipboard.writeText(activeDeviceId);
+    setCopiedDeviceId(true);
+    setTimeout(() => setCopiedDeviceId(false), 2500);
+  };
+
+  // Confirm Pix Payment
   const handleConfirmPixPayment = async () => {
     if (!pixData) return;
     setIsProcessing(true);
-    await PaymentService.confirmPayment(pixData.paymentId);
+    const confirmRes = await PaymentService.confirmPayment(pixData.paymentId);
     setIsProcessing(false);
 
-    onActivatePro(pixData.planName);
-    setSuccessMsg('Pagamento Pix confirmado! Seu Plano Pro foi ativado!');
+    const durationDays: 30 | 365 = confirmRes.durationDays || pixData.durationDays || (selectedPlan === 'yearly' ? 365 : 30);
+    const planName = confirmRes.planName || pixData.planName || (durationDays === 365 ? 'Pro Anual (365 Dias)' : 'Pro Mensal (30 Dias)');
+    const finalActivationId = confirmRes.activationId || pixData.activationId || ActivationService.generateActivationId(durationDays);
+
+    onActivatePro(planName, durationDays, finalActivationId);
+    setSuccessMsg(`✓ Pagamento Confirmado! Plano de ${durationDays} dias ativado com ID: ${finalActivationId}`);
     setTimeout(() => {
       setSuccessMsg(null);
       setPixData(null);
       onClose();
-    }, 2500);
+    }, 3000);
+  };
+
+  // Validate and Activate via code
+  const handleValidateCode = async (codeToValidate?: string) => {
+    const code = (codeToValidate || manualCode).trim().toUpperCase();
+    if (!code) return;
+
+    setIsValidatingCode(true);
+    setCodeFeedback(null);
+
+    const result = await ActivationService.validateActivationId(code);
+    setIsValidatingCode(false);
+
+    if (result.valid) {
+      onActivatePro(result.planName, result.durationDays, result.activationId);
+      setCodeFeedback({
+        success: true,
+        message: result.message,
+      });
+      setSuccessMsg(`✓ ID ${result.activationId} validado! Plano de ${result.durationDays} dias liberado.`);
+      setManualCode('');
+      setTimeout(() => {
+        setSuccessMsg(null);
+        onClose();
+      }, 3000);
+    } else {
+      setCodeFeedback({
+        success: false,
+        message: result.message,
+      });
+    }
   };
 
   return (
@@ -96,7 +181,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
           <h2 className="text-xl font-extrabold text-white">Eleve seu Controle Financeiro</h2>
           <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
-            Desbloqueie IA Financeira, Projeções de Fluxo de Caixa, Lembretes Ilimitados e Planejador de Quitação.
+            Libere Extrato Detalhado, Adição por Voz com IA, Lembretes Ilimitados e Projeções Financeiras.
           </p>
         </div>
 
@@ -106,10 +191,10 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             <div className="p-6 text-center space-y-3 bg-emerald-950/40 border border-emerald-500/40 rounded-2xl animate-in zoom-in-95">
               <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto animate-pulse" />
               <h3 className="text-base font-bold text-white">{successMsg}</h3>
-              <p className="text-xs text-slate-300">Aproveite todos os recursos exclusivos do Clube Pro!</p>
+              <p className="text-xs text-slate-300">Aproveite todos os recursos exclusivos no seu aparelho!</p>
             </div>
           ) : pixData ? (
-            /* Pix Checkout Screen */
+            /* Pix Checkout Screen with Unique Activation ID */
             <div className="space-y-4 text-center animate-in fade-in">
               <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs text-emerald-300">
                 <span className="font-bold">Pagamento Pix Gerado!</span> Realize o pagamento pelo seu app bancário para liberar a assinatura.
@@ -120,6 +205,18 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   <QrCode className="w-5 h-5 text-emerald-400" />
                   <span>{pixData.planName} • {formatBRL(pixData.amount)}</span>
                 </div>
+
+                {/* Display the unique Activation ID assigned to this checkout */}
+                {pixData.activationId && (
+                  <div className="p-2.5 bg-slate-900 border border-emerald-500/30 rounded-xl text-center space-y-0.5">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                      ID de Ativação Reservado ({pixData.durationDays || (selectedPlan === 'yearly' ? 365 : 30)} Dias):
+                    </span>
+                    <div className="text-xs font-mono font-bold text-emerald-300 selection:bg-emerald-500 selection:text-slate-950">
+                      {pixData.activationId}
+                    </div>
+                  </div>
+                )}
 
                 {pixData.pixQrCodeBase64 ? (
                   <img
@@ -146,43 +243,159 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 active:scale-95"
                 >
                   <Copy className="w-4 h-4" />
-                  <span>{copied ? '✓ Código Pix Copiado!' : 'Copiar Código Pix Copia e Cola'}</span>
+                  <span>{copiedPix ? '✓ Código Pix Copiado!' : 'Copiar Código Pix Copia e Cola'}</span>
                 </button>
               </div>
 
-              <button
-                onClick={handleConfirmPixPayment}
-                disabled={isProcessing}
-                className="w-full py-3.5 px-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 active:scale-95 transition"
-              >
-                {isProcessing ? (
-                  <span className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                    <span>Verificando Pagamento...</span>
-                  </span>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Já Fiz o Pagamento (Ativar Plano Pro)</span>
-                  </>
-                )}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPixData(null)}
+                  className="py-3 px-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition"
+                >
+                  Voltar
+                </button>
+                <button
+                  onClick={handleConfirmPixPayment}
+                  disabled={isProcessing}
+                  className="flex-1 py-3 px-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 active:scale-95 transition"
+                >
+                  {isProcessing ? (
+                    <span className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                      <span>Validando Pagamento...</span>
+                    </span>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Já Fiz o Pagamento (Ativar {pixData.durationDays || (selectedPlan === 'yearly' ? 365 : 30)}d)</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           ) : (
             <>
-              {/* Active Status Badge if Pro */}
-              {isProActive && (
-                <div className="p-3 bg-emerald-500/15 border border-emerald-500/40 rounded-2xl flex items-center gap-3">
-                  <Award className="w-6 h-6 text-emerald-400 shrink-0" />
-                  <div>
-                    <p className="text-xs font-bold text-emerald-300">Você já é Membro Pro Ativo!</p>
-                    <p className="text-[11px] text-slate-400">Todos os recursos premium estão liberados no seu aparelho.</p>
+              {/* Active Status Banner if Pro */}
+              {subscription.isPro && (
+                <div className="p-4 bg-emerald-500/15 border border-emerald-500/40 rounded-2xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Award className="w-5 h-5 text-emerald-400" />
+                      <span className="text-xs font-bold text-emerald-300">
+                        Plano Ativo: {subscription.planName}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-500/50">
+                      {remainingDays} dias restantes
+                    </span>
+                  </div>
+
+                  {/* Activation ID & Bound Device Display */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {subscription.activationId && (
+                      <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold">ID da Licença:</div>
+                          <div className="font-mono text-emerald-400 font-bold text-xs">{subscription.activationId}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCopyActiveId}
+                          className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-900 border border-slate-800 transition"
+                          title="Copiar ID da Licença"
+                        >
+                          {copiedId ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
+                          <Smartphone className="w-3 h-3 text-emerald-400" />
+                          <span>Aparelho Vinculado:</span>
+                        </div>
+                        <div className="font-mono text-emerald-300 font-bold text-xs">{activeDeviceId}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCopyDeviceId}
+                        className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-900 border border-slate-800 transition"
+                        title="Copiar ID do Aparelho"
+                      >
+                        {copiedDeviceId ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-emerald-500/20">
+                    <span>Vencimento: <strong>{formatDateBR(new Date(subscription.expiresAt).toISOString().slice(0, 10))}</strong></span>
+                    <span>Duração: <strong>{subscription.durationDays || 365} dias</strong></span>
                   </div>
                 </div>
               )}
 
-              {/* Plan Toggle */}
+              {/* Explicit Device Identification & Hardware Binding Card */}
+              <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-slate-200">Identificação deste Aparelho:</span>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <Fingerprint className="w-3 h-3 text-emerald-400" /> Configurado & Reconhecido
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between bg-slate-900/90 px-3 py-2.5 rounded-xl border border-slate-800">
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] text-slate-400 font-medium">ID Único do Aparelho (Device ID):</div>
+                    <div className="text-xs font-mono font-bold text-emerald-400 select-all tracking-wider">
+                      {activeDeviceId}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyDeviceId}
+                    className="p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800 hover:bg-slate-700 transition flex items-center gap-1 text-[11px] font-semibold"
+                    title="Copiar ID do Aparelho"
+                  >
+                    {copiedDeviceId ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400">Copiado</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Copiar ID</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+                  <div className="bg-slate-900/50 p-2 rounded-lg border border-slate-800/80">
+                    <span className="text-[10px] text-slate-500 block">Dispositivo / Plataforma:</span>
+                    <strong className="text-slate-200 text-xs">{deviceInfo.platform}</strong>
+                  </div>
+                  <div className="bg-slate-900/50 p-2 rounded-lg border border-slate-800/80">
+                    <span className="text-[10px] text-slate-500 block">Resolução de Tela:</span>
+                    <strong className="text-slate-200 text-xs">{deviceInfo.screenResolution}</strong>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-slate-400 bg-emerald-950/20 p-2 rounded-xl border border-emerald-500/20 flex items-start gap-1.5 leading-relaxed">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Como funciona:</strong> Este identificador exclusivo ({activeDeviceId}) garante que qualquer licença de 30 ou 365 dias ativada fique vinculada a este celular.
+                  </span>
+                </div>
+              </div>
+
+              {/* Plan Cards (30 Dias vs 365 Dias) */}
               <div className="grid grid-cols-2 gap-3">
+                {/* 30 Days Monthly Plan */}
                 <div 
                   onClick={() => setSelectedPlan('monthly')}
                   className={`cursor-pointer p-4 rounded-2xl border transition-all relative ${
@@ -191,14 +404,18 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                       : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-white">Pro Mensal</span>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold text-white">Pro 30 Dias</span>
                     {selectedPlan === 'monthly' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
                   </div>
                   <div className="text-lg font-extrabold text-emerald-400">R$ 9,90</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">Cobrado mensalmente</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">Válido por 30 dias</div>
+                  <div className="mt-2 text-[10px] text-emerald-300 font-mono font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                    ID: PRO-30D-...
+                  </div>
                 </div>
 
+                {/* 365 Days Yearly Plan */}
                 <div 
                   onClick={() => setSelectedPlan('yearly')}
                   className={`cursor-pointer p-4 rounded-2xl border transition-all relative overflow-hidden ${
@@ -210,13 +427,69 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   <div className="absolute top-0 right-0 bg-emerald-500 text-slate-950 text-[9px] font-extrabold px-2 py-0.5 rounded-bl-lg uppercase tracking-wider">
                     -33% OFF
                   </div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-white">Pro Anual</span>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold text-white">Pro 365 Dias</span>
                     {selectedPlan === 'yearly' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
                   </div>
                   <div className="text-lg font-extrabold text-emerald-400">R$ 79,90</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">Equivale a R$ 6,65/mês</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">Válido por 1 ano inteiro</div>
+                  <div className="mt-2 text-[10px] text-emerald-300 font-mono font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                    ID: PRO-365D-...
+                  </div>
                 </div>
+              </div>
+
+              {/* Functional Activation via Key / ID Form */}
+              <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                    Ativar por Código ou ID de Licença
+                  </span>
+                  <span className="text-[10px] text-slate-400">30d ou 365d</span>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Ex: PRO-30D-XXXX ou PRO-365D-XXXX"
+                    value={manualCode}
+                    onChange={(e) => {
+                      setManualCode(e.target.value.toUpperCase());
+                      setCodeFeedback(null);
+                    }}
+                    className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleValidateCode()}
+                    disabled={isValidatingCode || !manualCode.trim()}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition shadow active:scale-95 flex items-center gap-1"
+                  >
+                    {isValidatingCode ? (
+                      <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                    )}
+                    <span>Validar</span>
+                  </button>
+                </div>
+
+                {/* Feedback on validation */}
+                {codeFeedback && (
+                  <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 animate-in fade-in ${
+                    codeFeedback.success 
+                      ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300' 
+                      : 'bg-red-500/20 border border-red-500/40 text-red-300'
+                  }`}>
+                    {codeFeedback.success ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                    )}
+                    <span>{codeFeedback.message}</span>
+                  </div>
+                )}
               </div>
 
               {/* Pro Benefits List */}
@@ -227,11 +500,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 </p>
 
                 {[
-                  { title: 'Assistente IA Financeiro', desc: 'Dicas personalizadas de gastos e orçamento baseadas no seu extrato.' },
-                  { title: 'Projeções de Fluxo de Caixa', desc: 'Simule seus saldos e reservas para os próximos 6 meses.' },
-                  { title: 'Planejador de Quitação', desc: 'Organização automática por prioridades e taxas de juros por banco.' },
-                  { title: 'Categorias & Lembretes Ilimitados', desc: 'Crie quantas categorias e alertas de vencimento precisar.' },
-                  { title: 'Backup Criptografado em Nuvem', desc: 'Sincronize e recupere seus dados entre aparelhos com segurança.' }
+                  { title: 'Extrato Financeiro Completo', desc: 'Filtros avançados por categoria, método de pagamento e busca instantânea.' },
+                  { title: 'Adição por Voz com IA', desc: 'Dite suas compras em linguagem natural para lançamento automático.' },
+                  { title: 'Projeções de Fluxo de Caixa', desc: 'Simulação de saldos e reservas futuras para os próximos meses.' },
+                  { title: 'Lembretes & Faturas Ilimitadas', desc: 'Alertas com contagem regressiva para nunca pagar juros.' },
+                  { title: 'ID de Licença Individual', desc: 'Chave exclusiva vinculada ao seu aparelho para controle e auditoria.' }
                 ].map((item, idx) => (
                   <div key={idx} className="flex items-start gap-2.5 text-xs">
                     <div className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
@@ -245,14 +518,6 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 ))}
               </div>
 
-              {/* FAQ Answers to User Questions */}
-              <div className="p-3.5 bg-slate-950/60 rounded-2xl border border-slate-800 text-[11px] text-slate-300 space-y-2">
-                <p className="font-semibold text-emerald-400">ℹ Dúvidas Frequentes:</p>
-                <p className="text-slate-400">
-                  <strong>Onde os dados ficam salvos?</strong> No armazenamento local criptografado do seu aparelho (IndexedDB/LocalStorage). Para abrir em outro celular, use o backup JSON ou a assinatura em nuvem.
-                </p>
-              </div>
-
               {/* Subscribe CTA */}
               <button
                 type="button"
@@ -263,12 +528,16 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 {isProcessing ? (
                   <span className="flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                    <span>Gerando Pix de Assinatura...</span>
+                    <span>Gerando Cobrança Pix...</span>
                   </span>
                 ) : (
                   <>
                     <Crown className="w-4 h-4" />
-                    <span>{isProActive ? 'Renovar / Gerenciar Assinatura Pro' : `Pagar com Pix ${selectedPlan === 'yearly' ? 'Anual (R$ 79,90)' : 'Mensal (R$ 9,90)'}`}</span>
+                    <span>
+                      {selectedPlan === 'yearly' 
+                        ? 'Pagar com Pix Anual (R$ 79,90 • 365 Dias)' 
+                        : 'Pagar com Pix Mensal (R$ 9,90 • 30 Dias)'}
+                    </span>
                   </>
                 )}
               </button>

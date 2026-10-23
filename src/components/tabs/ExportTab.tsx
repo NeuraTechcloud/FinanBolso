@@ -318,14 +318,21 @@ export const ExportTab: React.FC<ExportTabProps> = ({
       </div>
 
       {/* Privacy & Offline Guarantee Box */}
-      <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-xs text-slate-300 flex items-start gap-3">
-        <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <p className="font-semibold text-emerald-300">Garantia de Privacidade & Offline Total</p>
-          <p className="text-[11px] text-slate-400 leading-relaxed">
-            Seus dados financeiros residem exclusivamente no armazenamento do seu aparelho. 
-            Não há contas na nuvem, logins obrigatórios ou rastreadores. Você tem posse integral dos seus arquivos e relatórios.
-          </p>
+      <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-xs text-slate-300 space-y-2">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-semibold text-emerald-300">Garantia de Privacidade & Offline Total</p>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Seus dados financeiros residem exclusivamente no armazenamento do seu aparelho. 
+              Não há contas na nuvem, logins obrigatórios ou rastreadores. Você tem posse integral dos seus arquivos e relatórios.
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-emerald-500/15 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+          <span>Identificação do Aparelho:</span>
+          <strong className="text-emerald-400">{StorageService.getDeviceId()}</strong>
         </div>
       </div>
 
