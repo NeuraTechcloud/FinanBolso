@@ -254,6 +254,38 @@ app.post('/api/subscription/validate-id', (req, res) => {
   });
 });
 
+// Global server-side subscribers & connected devices store
+const globalSubscribers = new Map<string, any>();
+
+// API Endpoints for Global Subscribers Sync
+app.get('/api/subscription/subscribers', (_req, res) => {
+  return res.json(Array.from(globalSubscribers.values()));
+});
+
+app.post('/api/subscription/subscribers', (req, res) => {
+  const sub = req.body;
+  if (!sub || (!sub.id && !sub.deviceId)) {
+    return res.status(400).json({ success: false, error: 'Invalid subscriber data' });
+  }
+  const key = sub.deviceId || sub.id;
+  globalSubscribers.set(key, sub);
+  if (sub.id && sub.id !== key) {
+    globalSubscribers.set(sub.id, sub);
+  }
+  return res.json({ success: true, subscriber: sub });
+});
+
+app.delete('/api/subscription/subscribers/:id', (req, res) => {
+  const { id } = req.params;
+  globalSubscribers.delete(id);
+  for (const [key, val] of globalSubscribers.entries()) {
+    if (val.id === id || val.deviceId === id) {
+      globalSubscribers.delete(key);
+    }
+  }
+  return res.json({ success: true });
+});
+
 // ------------------------------------------------------------------
 // 4. Webhook Handler for Mercado Pago Payments
 // ------------------------------------------------------------------

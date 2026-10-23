@@ -99,12 +99,27 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      try {
-        const saved = localStorage.getItem('finanbolso_admin_subscribers_v1');
-        if (saved) {
-          setSubscribers(JSON.parse(saved));
-        }
-      } catch {}
+      const fetchAllSubscribers = async () => {
+        try {
+          const res = await fetch('/api/subscription/subscribers');
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              setSubscribers(data);
+              localStorage.setItem('finanbolso_admin_subscribers_v1', JSON.stringify(data));
+              return;
+            }
+          }
+        } catch {}
+
+        try {
+          const saved = localStorage.getItem('finanbolso_admin_subscribers_v1');
+          if (saved) {
+            setSubscribers(JSON.parse(saved));
+          }
+        } catch {}
+      };
+      fetchAllSubscribers();
     }
   }, [isOpen]);
 
