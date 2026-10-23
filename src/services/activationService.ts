@@ -20,12 +20,8 @@ export interface AuthorizedKey {
 
 const STORAGE_AUTHORIZED_KEYS = 'finanbolso_authorized_keys_v1';
 
-// Initial keys authorized by administration
-const DEFAULT_AUTHORIZED_KEYS: AuthorizedKey[] = [
-  { key: 'PRO-365D-MSTR-2026', durationDays: 365, issuedAt: Date.now(), label: 'Chave Master Gestor' },
-  { key: 'PRO-30D-MARI-8411', durationDays: 30, issuedAt: Date.now(), label: 'Licença Mariana 30d' },
-  { key: 'PRO-365D-ROBT-9902', durationDays: 365, issuedAt: Date.now(), label: 'Licença Roberto 365d' },
-];
+// Initial keys authorized by administration (starts empty for fresh creation)
+const DEFAULT_AUTHORIZED_KEYS: AuthorizedKey[] = [];
 
 function generateRandomSegment(length: number = 4): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -188,5 +184,38 @@ export const ActivationService = {
       activatedAt: now,
       expiresAt: now + days * 24 * 60 * 60 * 1000,
     };
+  },
+
+  // Automatically record or update a subscriber in the admin subscriber list when activated
+  recordSubscriber(subscription: UserSubscription): void {
+    try {
+      const saved = localStorage.getItem('finanbolso_admin_subscribers_v1');
+      let subs = saved ? JSON.parse(saved) : [];
+      const deviceId = subscription.deviceId || StorageService.getDeviceId();
+      const existingIdx = subs.findIndex((s: any) => 
+        (subscription.activationId && s.activationId === subscription.activationId) || s.id === deviceId
+      );
+
+      const planTitle = subscription.durationDays === 30 ? 'Pro Mensal' : 'Pro Anual';
+      const newSub = {
+        id: existingIdx >= 0 ? subs[existingIdx].id : `sub-${Date.now()}`,
+        name: existingIdx >= 0 ? subs[existingIdx].name : `Usuário Aparelho (${deviceId.slice(0, 8)})`,
+        email: existingIdx >= 0 ? subs[existingIdx].email : `cliente_${deviceId.slice(0, 6)}@finanbolso.app`,
+        plan: planTitle,
+        durationDays: subscription.durationDays || 365,
+        activationId: subscription.activationId,
+        status: 'Ativo' as const,
+        expiresAt: new Date(subscription.expiresAt).toISOString().slice(0, 10),
+        managedAssetsValue: existingIdx >= 0 ? subs[existingIdx].managedAssetsValue : 35000.00,
+      };
+
+      if (existingIdx >= 0) {
+        subs[existingIdx] = newSub;
+      } else {
+        subs.unshift(newSub);
+      }
+
+      localStorage.setItem('finanbolso_admin_subscribers_v1', JSON.stringify(subs));
+    } catch {}
   }
 };

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { PWAInstallButton } from './PWAInstallButton';
+import { HapticService } from '../services/haptics';
 
 interface HeaderProps {
   selectedMonth: string; // YYYY-MM or 'all'
@@ -42,6 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Navigation helper for months
   const navigateMonth = (direction: -1 | 1) => {
+    HapticService.lightTap();
     if (selectedMonth === 'all') {
       const now = new Date();
       onSelectMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
@@ -185,35 +187,39 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Month Navigator Bar */}
-      <div className="mt-3 flex items-center justify-between bg-slate-900/90 border border-slate-800/80 rounded-xl px-2 py-1.5">
+      {/* Month Navigator Bar with Thumb-Friendly Hitboxes */}
+      <div className="mt-3 flex items-center justify-between bg-slate-900/90 border border-slate-800/80 rounded-2xl px-2 py-1 select-none">
         <button
           onClick={() => navigateMonth(-1)}
-          className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition active:scale-95"
+          className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition touch-pressable"
           aria-label="Mês anterior"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-5 h-5" />
         </button>
 
         <div className="flex items-center gap-2">
-          <Calendar className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-xs font-semibold text-slate-200">
+          <Calendar className="w-4 h-4 text-emerald-400" />
+          <span className="text-xs font-bold text-slate-100">
             {formattedMonthLabel()}
           </span>
           {selectedMonth !== 'all' ? (
             <button
-              onClick={() => onSelectMonth('all')}
-              className="text-[10px] text-slate-400 hover:text-emerald-400 underline transition"
+              onClick={() => {
+                HapticService.lightTap();
+                onSelectMonth('all');
+              }}
+              className="text-[11px] text-slate-400 hover:text-emerald-400 underline transition py-1 px-1 touch-pressable"
             >
               (Ver tudo)
             </button>
           ) : (
             <button
               onClick={() => {
+                HapticService.lightTap();
                 const now = new Date();
                 onSelectMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
               }}
-              className="text-[10px] text-emerald-400 hover:underline transition"
+              className="text-[11px] text-emerald-400 hover:underline transition py-1 px-1 touch-pressable"
             >
               (Mês atual)
             </button>
@@ -222,10 +228,10 @@ export const Header: React.FC<HeaderProps> = ({
 
         <button
           onClick={() => navigateMonth(1)}
-          className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition active:scale-95"
+          className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition touch-pressable"
           aria-label="Próximo mês"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-5 h-5" />
         </button>
       </div>
     </header>

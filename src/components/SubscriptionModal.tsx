@@ -15,7 +15,8 @@ import {
   Check,
   Smartphone,
   Fingerprint,
-  CheckCheck
+  CheckCheck,
+  Trash2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { PaymentService, PaymentPreferenceResponse } from '../services/paymentService';
@@ -29,6 +30,7 @@ interface SubscriptionModalProps {
   onClose: () => void;
   subscription: UserSubscription;
   onActivatePro: (planName: string, durationDays: 30 | 365, activationId?: string) => void;
+  onResetSubscription?: () => void;
 }
 
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
@@ -36,6 +38,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   onClose,
   subscription,
   onActivatePro,
+  onResetSubscription,
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -66,16 +69,22 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     if (res.success && res.pixCopyPaste) {
       setPixData(res);
     } else {
-      // Direct activation fallback if offline or server route error
+      // Offline / fallback Pix order with reserved activation ID
       const durationDays: 30 | 365 = selectedPlan === 'yearly' ? 365 : 30;
       const planName = durationDays === 365 ? 'Pro Anual (365 Dias)' : 'Pro Mensal (30 Dias)';
-      const generatedId = ActivationService.generateActivationId(durationDays);
-      onActivatePro(planName, durationDays, generatedId);
-      setSuccessMsg(`Parabéns! Sua assinatura ${planName} foi ativada com o ID: ${generatedId}`);
-      setTimeout(() => {
-        setSuccessMsg(null);
-        onClose();
-      }, 3000);
+      const activationId = ActivationService.generateActivationId(durationDays);
+      const amount = durationDays === 365 ? 79.90 : 9.90;
+      const fallbackPixCode = `00020126580014br.gov.bcb.pix0136finanbolso-${durationDays}d-${Math.random().toString(36).slice(2, 7)}520400005303986540${amount.toFixed(2)}5802BR5915FinanBolso Pro6009SAO PAULO62070503***6304`;
+      
+      setPixData({
+        success: true,
+        paymentId: `pay_${Date.now()}`,
+        planName,
+        durationDays,
+        activationId,
+        amount,
+        pixCopyPaste: fallbackPixCode,
+      });
     }
   };
 
@@ -332,6 +341,21 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                     <span>Vencimento: <strong>{formatDateBR(new Date(subscription.expiresAt).toISOString().slice(0, 10))}</strong></span>
                     <span>Duração: <strong>{subscription.durationDays || 365} dias</strong></span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onResetSubscription) {
+                        onResetSubscription();
+                        setSuccessMsg('✓ Plano Pro removido. Aparelho redefinido para o Gratuito.');
+                        setTimeout(() => setSuccessMsg(null), 2500);
+                      }
+                    }}
+                    className="w-full mt-1.5 py-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 active:scale-95"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remover Plano Pro / Voltar ao Gratuito</span>
+                  </button>
                 </div>
               )}
 

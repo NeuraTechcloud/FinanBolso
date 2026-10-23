@@ -172,7 +172,20 @@ export default function App() {
     newSub.planName = planName;
     setSubscription(newSub);
     StorageService.saveSubscription(newSub);
+    ActivationService.recordSubscriber(newSub);
     showToast(`✓ Plano Pro (${days} Dias) Ativado! ID: ${newSub.activationId}`);
+  };
+
+  const handleResetSubscription = () => {
+    const freeSub: UserSubscription = {
+      isPro: false,
+      planName: 'Plano Gratuito',
+      planType: 'free',
+      expiresAt: 0,
+    };
+    setSubscription(freeSub);
+    StorageService.saveSubscription(freeSub);
+    showToast('✓ Plano Pro removido. Aparelho redefinido para o Gratuito.');
   };
 
   // Open modal for editing
@@ -351,6 +364,7 @@ export default function App() {
           onClose={() => setIsSubscriptionModalOpen(false)}
           subscription={subscription}
           onActivatePro={handleActivatePro}
+          onResetSubscription={handleResetSubscription}
         />
 
         {/* Manager & Admin Panel Modal */}

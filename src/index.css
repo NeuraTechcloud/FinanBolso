@@ -14,10 +14,23 @@
     width: 100%;
     height: 100%;
     overflow-x: hidden;
+    overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: #020617;
+    touch-action: manipulation;
+  }
+
+  /* Eliminate 300ms tap delay and double-tap zoom delay on interactive elements */
+  button, a, input, select, textarea, [role="button"] {
+    touch-action: manipulation;
+  }
+
+  /* Prevent accidental text selection during rapid tapping/swiping on mobile controls */
+  button, nav, header, [role="tab"], .no-select {
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   #root {
@@ -25,23 +38,36 @@
     height: 100%;
     display: flex;
     flex-direction: column;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
   }
 }
 
-/* Hardware accelerated fixed bars */
+/* Hardware accelerated fixed bars and dynamic surfaces */
 .gpu-layer {
-  transform: translateZ(0);
+  transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
   perspective: 1000px;
-  will-change: transform;
+  will-change: transform, opacity;
 }
 
-/* Smooth mobile scroll container */
+/* Silky smooth 60/120fps mobile momentum scroll container */
 .mobile-scroll {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   overscroll-behavior-y: contain;
   touch-action: pan-y;
+  contain: paint content;
+}
+
+/* Mobile tactile tap feedback */
+.touch-pressable {
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.12s ease;
+  will-change: transform;
+}
+.touch-pressable:active {
+  transform: scale(0.96);
+  opacity: 0.88;
 }
 
 /* Custom scrollbars */

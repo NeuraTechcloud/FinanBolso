@@ -45,50 +45,7 @@ interface ManagerPanelModalProps {
   subscription: UserSubscription;
 }
 
-const INITIAL_SUBSCRIBERS: Subscriber[] = [
-  { 
-    id: 'sub-1', 
-    name: 'Carlos Eduardo (Você - Gestor)', 
-    email: 'carlos@finanbolso.app', 
-    plan: 'Pro Anual', 
-    durationDays: 365,
-    activationId: 'PRO-365D-MSTR-2026',
-    status: 'Ativo', 
-    expiresAt: '2027-12-31', 
-    managedAssetsValue: 142500.00 
-  },
-  { 
-    id: 'sub-2', 
-    name: 'Mariana Souza', 
-    email: 'mariana.souza@gmail.com', 
-    plan: 'Pro Mensal', 
-    durationDays: 30,
-    activationId: 'PRO-30D-MARI-8411',
-    status: 'Ativo', 
-    expiresAt: '2026-05-15', 
-    managedAssetsValue: 48900.00 
-  },
-  { 
-    id: 'sub-3', 
-    name: 'Roberto Alcantara', 
-    email: 'roberto.invest@outlook.com', 
-    plan: 'Enterprise', 
-    durationDays: 365,
-    activationId: 'PRO-365D-ROBT-9902',
-    status: 'Ativo', 
-    expiresAt: '2027-01-10', 
-    managedAssetsValue: 850000.00 
-  },
-  { 
-    id: 'sub-4', 
-    name: 'Juliana Mendes', 
-    email: 'ju.mendes@yahoo.com.br', 
-    plan: 'Gratuito', 
-    status: 'Expirado', 
-    expiresAt: '2026-01-01', 
-    managedAssetsValue: 12400.00 
-  },
-];
+const INITIAL_SUBSCRIBERS: Subscriber[] = [];
 
 export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   isOpen,
@@ -103,7 +60,12 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   const [subscribers, setSubscribers] = useState<Subscriber[]>(() => {
     try {
       const saved = localStorage.getItem('finanbolso_admin_subscribers_v1');
-      return saved ? JSON.parse(saved) : INITIAL_SUBSCRIBERS;
+      const parsed = saved ? JSON.parse(saved) : [];
+      if (!parsed || parsed.length === 0) {
+        localStorage.setItem('finanbolso_admin_subscribers_v1', JSON.stringify(INITIAL_SUBSCRIBERS));
+        return INITIAL_SUBSCRIBERS;
+      }
+      return parsed;
     } catch {
       return INITIAL_SUBSCRIBERS;
     }
@@ -134,6 +96,17 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
       localStorage.setItem('finanbolso_admin_subscribers_v1', JSON.stringify(subscribers));
     } catch {}
   }, [subscribers]);
+
+  useEffect(() => {
+    if (isOpen) {
+      try {
+        const saved = localStorage.getItem('finanbolso_admin_subscribers_v1');
+        if (saved) {
+          setSubscribers(JSON.parse(saved));
+        }
+      } catch {}
+    }
+  }, [isOpen]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -539,9 +512,25 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
 
                 {/* Subscribers List */}
                 <div className="space-y-2.5">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Lista de Assinantes Cadastrados ({subscribers.length})
-                  </h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Lista de Assinantes Cadastrados ({subscribers.length})
+                    </h4>
+                    {subscribers.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSubscribers([]);
+                          localStorage.removeItem('finanbolso_admin_subscribers_v1');
+                          localStorage.removeItem('finanbolso_authorized_keys_v1');
+                          showMsg('✓ Todos os registros e chaves Pro foram limpos com sucesso.');
+                        }}
+                        className="text-[10px] text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded-lg transition font-semibold"
+                      >
+                        Limpar / Zerar Lista
+                      </button>
+                    )}
+                  </div>
 
                   <div className="space-y-2">
                     {subscribers.map((sub) => (
