@@ -560,7 +560,6 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                 placeholder="Senha Administrativa"
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
-                autoFocus
                 className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-center text-white text-sm font-mono tracking-widest focus:outline-none focus:border-emerald-500 transition"
               />
               {pinError && <p className="text-xs text-red-400 text-center">Senha incorreta.</p>}

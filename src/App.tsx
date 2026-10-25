@@ -524,7 +524,7 @@ function AppContent() {
         {/* Tab Content with min-h-0 and overflow-y-auto so scrolling is 100% smooth */}
         <main 
           id="app-main-scroll"
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain mobile-scroll px-4 pt-3 pb-24"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain mobile-scroll px-4 pt-3 pb-36"
         >
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.div
@@ -539,6 +539,8 @@ function AppContent() {
                 <HomeTab
                   transactions={transactions}
                   categories={categories}
+                  savingsGoals={savingsGoals}
+                  reminders={reminders}
                   selectedMonth={selectedMonth}
                   isPro={subscription.isPro}
                   onOpenSubscription={handleOpenSubscriptionModal}

@@ -16,12 +16,15 @@ import {
   CheckCircle2,
   Clock,
   FolderPlus,
-  Tag
+  Tag,
+  History,
+  TrendingUp as TrendingUpIcon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { SavingsGoal, Category, Transaction, Reminder, PaymentMethod } from '../../types/finance';
+import { SavingsGoal, Category, Transaction, Reminder, PaymentMethod, GoalHistoryEntry } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
 import { motion, AnimatePresence } from 'motion/react';
+import { GoalSimulator } from '../GoalSimulator';
 
 interface GoalsTabProps {
   savingsGoals: SavingsGoal[];
@@ -92,7 +95,7 @@ const MemoizedGoalItem = memo<{
           <span className="text-emerald-400">{formatBRL(goal.currentAmount)}</span>
           <span className="text-slate-400">Meta: {formatBRL(goal.targetAmount)} ({percent}%)</span>
         </div>
-        <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+        <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800 relative">
           <div 
             className="h-full rounded-full transition-all duration-500"
             style={{ 
@@ -100,6 +103,14 @@ const MemoizedGoalItem = memo<{
               backgroundColor: goal.color 
             }}
           />
+          {/* Milestone markers */}
+          {[25, 50, 75].map(m => (
+            <div 
+              key={m} 
+              className="absolute top-0 bottom-0 w-[1px] bg-slate-800/60" 
+              style={{ left: `${m}%` }} 
+            />
+          ))}
         </div>
       </div>
 
@@ -327,9 +338,16 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
     const newAmount = depositGoal.currentAmount + added;
     const hitTarget = newAmount >= depositGoal.targetAmount && depositGoal.currentAmount < depositGoal.targetAmount;
 
+    const today = new Date().toISOString().slice(0, 10);
+    const newHistory: GoalHistoryEntry = { date: today, amount: added };
+    
     const updated = savingsGoals.map(g => 
       g.id === depositGoal.id 
-        ? { ...g, currentAmount: newAmount }
+        ? { 
+            ...g, 
+            currentAmount: newAmount,
+            history: [...(g.history || []), newHistory]
+          }
         : g
     );
     onUpdateGoals(updated);
@@ -432,7 +450,7 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
       <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-900 border border-slate-800 rounded-2xl">
         <button
           onClick={() => setActiveSubTab('savings')}
-          className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition ${
+          className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition ${
             activeSubTab === 'savings'
               ? 'bg-emerald-500 text-slate-950 shadow-md'
               : 'text-slate-400 hover:text-white'
@@ -443,18 +461,18 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
         </button>
         <button
           onClick={() => setActiveSubTab('budgets')}
-          className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition ${
+          className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition ${
             activeSubTab === 'budgets'
               ? 'bg-emerald-500 text-slate-950 shadow-md'
               : 'text-slate-400 hover:text-white'
           }`}
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span>Orçamentos</span>
+          <span className="truncate">Orçamentos</span>
         </button>
         <button
           onClick={() => setActiveSubTab('reminders')}
-          className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition ${
+          className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition ${
             activeSubTab === 'reminders'
               ? 'bg-emerald-500 text-slate-950 shadow-md'
               : 'text-slate-400 hover:text-white'
@@ -580,7 +598,6 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
                       <input
                         type="number"
                         step="10"
-                        autoFocus
                         placeholder="Teto mensal (R$)"
                         value={budgetLimitStr}
                         onChange={(e) => setBudgetLimitStr(e.target.value)}
@@ -689,12 +706,12 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
       {/* MODAL: NEW CATEGORY */}
       <AnimatePresence>
         {isCategoryModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer"
+              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer my-8 sm:my-auto"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -712,7 +729,6 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
                   <input
                     type="text"
                     required
-                    autoFocus
                     placeholder="Ex: Pet / Animais, Streaming, etc."
                     value={catName}
                     onChange={(e) => setCatName(e.target.value)}
@@ -794,12 +810,12 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
       {/* MODAL: NEW REMINDER */}
       <AnimatePresence>
         {isReminderModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer"
+              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer my-8 sm:my-auto"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -817,7 +833,6 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
                   <input
                     type="text"
                     required
-                    autoFocus
                     placeholder="Ex: Conta de Luz, Aluguel, etc."
                     value={remTitle}
                     onChange={(e) => setRemTitle(e.target.value)}
@@ -877,12 +892,12 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
       {/* MODAL: EDIT/CREATE SAVINGS GOAL */}
       <AnimatePresence>
         {isGoalModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer"
+              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer my-8 sm:my-auto"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-white">
@@ -899,13 +914,34 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
                   <input
                     type="text"
                     required
-                    autoFocus
                     placeholder="Ex: Viagem de Férias"
                     value={goalTitle}
                     onChange={(e) => setGoalTitle(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
                   />
                 </div>
+
+                {editingGoal && (
+                  <GoalSimulator 
+                    targetAmount={parseFloat(goalTargetStr) || 0} 
+                    currentAmount={parseFloat(goalCurrentStr) || 0} 
+                  />
+                )}
+
+                {editingGoal && editingGoal.history && editingGoal.history.length > 0 && (
+                  <div className="bg-slate-950/40 border border-slate-800/50 rounded-2xl p-3 space-y-2 max-h-32 overflow-y-auto no-scrollbar">
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                      <History className="w-3 h-3" />
+                      Histórico de Aportes
+                    </div>
+                    {editingGoal.history.slice().reverse().map((h, i) => (
+                      <div key={i} className="flex items-center justify-between text-[11px] py-1 border-b border-slate-800/30 last:border-0">
+                        <span className="text-slate-400">{formatDateBR(h.date)}</span>
+                        <span className="text-emerald-400 font-bold">+{formatBRL(h.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -1011,12 +1047,12 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
       {/* QUICK DEPOSIT MODAL */}
       <AnimatePresence>
         {depositGoal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl gpu-layer"
+              className="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl gpu-layer my-4 sm:my-auto"
             >
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold text-white">Depositar na Meta</h3>
@@ -1037,7 +1073,6 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
                     step="0.01"
                     min="0.01"
                     required
-                    autoFocus
                     placeholder="Ex: 250,00"
                     value={depositAmountStr}
                     onChange={(e) => setDepositAmountStr(e.target.value)}

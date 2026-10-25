@@ -38,6 +38,11 @@ export interface Transaction {
   updatedAt?: number;
 }
 
+export interface GoalHistoryEntry {
+  date: string;
+  amount: number;
+}
+
 export interface SavingsGoal {
   id: string;
   title: string;
@@ -46,6 +51,8 @@ export interface SavingsGoal {
   deadline?: string;
   color: string;
   icon: string;
+  history?: GoalHistoryEntry[];
+  monthlyContributionTarget?: number;
 }
 
 export interface MonthlyBudget {

@@ -21,6 +21,9 @@ import { useMonthTransactions } from '../../hooks/useMonthTransactions';
 import { AISmartAdvisor } from '../AISmartAdvisor';
 import { DebtQuittancePlanner } from '../DebtQuittancePlanner';
 import { DueBillsAlertBanner } from '../DueBillsAlertBanner';
+import { NetWorthCard } from '../NetWorthCard';
+import { useNetWorth } from '../../hooks/useNetWorth';
+import { SavingsGoal, Reminder } from '../../types/finance';
 
 // Helper to identify if a transaction is a Ticket / Benefit voucher (VR/VA)
 const isTicketTx = (t: Transaction) => {
@@ -33,6 +36,8 @@ const isTicketTx = (t: Transaction) => {
 interface HomeTabProps {
   transactions: Transaction[];
   categories: Category[];
+  savingsGoals: SavingsGoal[];
+  reminders: Reminder[];
   selectedMonth: string;
   isPro: boolean;
   onOpenSubscription: () => void;
@@ -104,6 +109,8 @@ MemoizedRecentTxRow.displayName = 'MemoizedRecentTxRow';
 export const HomeTab: React.FC<HomeTabProps> = memo(({
   transactions,
   categories,
+  savingsGoals,
+  reminders,
   selectedMonth,
   isPro,
   onOpenSubscription,
@@ -122,6 +129,8 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
     }
     return map;
   }, [categories]);
+
+  const netWorthData = useNetWorth(transactions, savingsGoals, reminders);
 
   const monthTransactions = useMonthTransactions(transactions, selectedMonth);
   // Current month totals memoized - Strictly separated by Liquid Cash (Salary/Bank) vs Ticket (VR/VA)
@@ -213,8 +222,11 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
 
   return (
     <div className="space-y-4 pb-24 animate-in fade-in">
-      {/* Top Cards Section: Responsive 2-Column Grid on Desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* 🏛️ Net Worth / Visão de Patrimônio */}
+      <NetWorthCard {...netWorthData} />
+
+      {/* Top Cards Section: Responsive Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Main Account Balance Card (Conta Corrente / Salário Líquido em Dinheiro) */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40 border border-slate-800 p-5 shadow-xl flex flex-col justify-between">
           <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
