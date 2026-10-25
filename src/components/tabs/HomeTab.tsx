@@ -16,7 +16,6 @@ import {
 import { Transaction, Category, PAYMENT_METHOD_LABELS, DEFAULT_QUICK_PRESETS, QuickPreset } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
 import { AISmartAdvisor } from '../AISmartAdvisor';
-import { CashFlowProjection } from '../CashFlowProjection';
 import { DebtQuittancePlanner } from '../DebtQuittancePlanner';
 
 interface HomeTabProps {
@@ -29,6 +28,8 @@ interface HomeTabProps {
   onSelectTransaction: (tx: Transaction) => void;
   onGoToTab: (tab: any) => void;
   onQuickAddPreset: (preset: QuickPreset) => void;
+  onTogglePaid?: (id: string) => void;
+  onNavigateToTransactions?: (view?: 'all' | 'future') => void;
 }
 
 interface RecentTxRowProps {
@@ -98,6 +99,8 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
   onSelectTransaction,
   onGoToTab,
   onQuickAddPreset,
+  onTogglePaid,
+  onNavigateToTransactions,
 }) => {
   // Category color lookup map
   const categoryColorMap = useMemo(() => {
@@ -283,7 +286,7 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
         </div>
       </div>
 
-      {/* Pro Features: AI Smart Advisor & Cash Flow Projections */}
+      {/* Pro Features: AI Smart Advisor & Debt Quittance Planner */}
       <AISmartAdvisor
         transactions={monthTransactions}
         categories={categories}
@@ -291,17 +294,14 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
         onOpenSubscription={onOpenSubscription}
       />
 
-      <CashFlowProjection
-        transactions={transactions}
-        isPro={isPro}
-        onOpenSubscription={onOpenSubscription}
-      />
-
       <DebtQuittancePlanner
         transactions={transactions}
         categories={categories}
+        selectedMonth={selectedMonth}
         isPro={isPro}
         onOpenSubscription={onOpenSubscription}
+        onTogglePaid={onTogglePaid}
+        onNavigateToTransactions={onNavigateToTransactions}
       />
 
       {/* Empty State / Welcome Guide (Clean data banner) */}

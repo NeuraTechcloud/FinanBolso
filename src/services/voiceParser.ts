@@ -59,6 +59,10 @@ export function parseFinancialText(
     paymentMethod = 'credit_card';
   } else if (lower.includes('débito') || lower.includes('debito')) {
     paymentMethod = 'debit_card';
+  } else if (lower.includes('boleto')) {
+    paymentMethod = 'boleto';
+  } else if (lower.includes('ticket') || lower.includes('vr') || lower.includes('va') || lower.includes('vale')) {
+    paymentMethod = 'ticket';
   } else if (lower.includes('dinheiro') || lower.includes('em espécie') || lower.includes('especie') || lower.includes('troco')) {
     paymentMethod = 'cash';
   } else if (lower.includes('ted') || lower.includes('doc') || lower.includes('transferência') || lower.includes('transferencia')) {

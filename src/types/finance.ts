@@ -4,6 +4,8 @@ export type PaymentMethod =
   | 'pix' 
   | 'credit_card' 
   | 'debit_card' 
+  | 'boleto'
+  | 'ticket'
   | 'cash' 
   | 'bank_transfer' 
   | 'other';
@@ -30,6 +32,7 @@ export interface Transaction {
   installmentNumber?: number;
   installmentsTotal?: number;
   recurringGroupId?: string;
+  isPaid?: boolean;
   createdAt: number;
   updatedAt?: number;
 }
@@ -54,6 +57,8 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, { label: string; icon:
   pix: { label: 'PIX', icon: 'Zap' },
   credit_card: { label: 'Cartão de Crédito', icon: 'CreditCard' },
   debit_card: { label: 'Cartão de Débito', icon: 'CreditCard' },
+  boleto: { label: 'Boleto Bancário', icon: 'FileText' },
+  ticket: { label: 'Ticket / Benefício (VR/VA)', icon: 'Utensils' },
   cash: { label: 'Dinheiro', icon: 'Banknote' },
   bank_transfer: { label: 'Transferência/TED', icon: 'ArrowLeftRight' },
   other: { label: 'Outro', icon: 'HelpCircle' },
@@ -72,10 +77,10 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'outros_gastos', name: 'Outros Gastos', type: 'expense', color: '#64748b', icon: 'MoreHorizontal', monthlyBudget: 300 },
 
   // Receitas
-  { id: 'salario', name: 'Salário & Pro-labore', type: 'income', color: '#10b981', icon: 'Briefcase' },
+  { id: 'salario', name: 'Salário Normal (Conta)', type: 'income', color: '#10b981', icon: 'Briefcase' },
+  { id: 'ticket_beneficio', name: 'Ticket & Benefícios (VR/VA)', type: 'income', color: '#f59e0b', icon: 'Utensils' },
   { id: 'freelance', name: 'Freelance & Projetos', type: 'income', color: '#06b6d4', icon: 'Laptop' },
-  { id: 'investimentos', name: 'Rendimentos & Dividendos', type: 'income', color: '#f59e0b', icon: 'TrendingUp' },
-  { id: 'beneficios', name: 'Benefícios & Vales', type: 'income', color: '#8b5cf6', icon: 'Gift' },
+  { id: 'investimentos', name: 'Rendimentos & Dividendos', type: 'income', color: '#8b5cf6', icon: 'TrendingUp' },
   { id: 'outras_receitas', name: 'Outras Entradas', type: 'income', color: '#14b8a6', icon: 'PlusCircle' },
 ];
 
@@ -119,14 +124,14 @@ export interface QuickPreset {
 }
 
 export const DEFAULT_QUICK_PRESETS: QuickPreset[] = [
-  { id: 'p1', title: 'Almoço', type: 'expense', category: 'Alimentação', defaultAmount: 35.0, paymentMethod: 'debit_card' },
-  { id: 'p2', title: 'Supermercado', type: 'expense', category: 'Alimentação', defaultAmount: 180.0, paymentMethod: 'credit_card' },
-  { id: 'p3', title: 'Café / Lanche', type: 'expense', category: 'Alimentação', defaultAmount: 12.0, paymentMethod: 'pix' },
+  { id: 'p1', title: 'Almoço (Ticket VR)', type: 'expense', category: 'Alimentação', defaultAmount: 38.0, paymentMethod: 'ticket' },
+  { id: 'p2', title: 'Supermercado (Ticket VA)', type: 'expense', category: 'Alimentação', defaultAmount: 180.0, paymentMethod: 'ticket' },
+  { id: 'p3', title: 'Boleto / Conta Luz/Água', type: 'expense', category: 'Moradia & Contas', defaultAmount: 140.0, paymentMethod: 'boleto' },
   { id: 'p4', title: 'Uber / Corrida', type: 'expense', category: 'Transporte & Combustível', defaultAmount: 24.0, paymentMethod: 'pix' },
   { id: 'p5', title: 'Combustível', type: 'expense', category: 'Transporte & Combustível', defaultAmount: 100.0, paymentMethod: 'credit_card' },
   { id: 'p6', title: 'Farmácia', type: 'expense', category: 'Saúde & Farmácia', defaultAmount: 45.0, paymentMethod: 'pix' },
-  { id: 'p7', title: 'Padaria', type: 'expense', category: 'Alimentação', defaultAmount: 20.0, paymentMethod: 'pix' },
-  { id: 'p8', title: 'Salário Mensal', type: 'income', category: 'Salário & Pro-labore', defaultAmount: 3800.0, paymentMethod: 'bank_transfer' },
+  { id: 'p7', title: 'Salário Normal (Conta)', type: 'income', category: 'Salário Normal (Conta)', defaultAmount: 3800.0, paymentMethod: 'bank_transfer' },
+  { id: 'p8', title: 'Ticket Alimentação / VR', type: 'income', category: 'Ticket & Benefícios (VR/VA)', defaultAmount: 750.0, paymentMethod: 'ticket' },
   { id: 'p9', title: 'Freelance / Extra', type: 'income', category: 'Freelance & Projetos', defaultAmount: 450.0, paymentMethod: 'pix' },
 ];
 

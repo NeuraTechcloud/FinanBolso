@@ -36,6 +36,7 @@ function AppContent() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [currentTab, setCurrentTab] = useState<TabType>('home');
+  const [transactionsSubTab, setTransactionsSubTab] = useState<'history' | 'future'>('history');
   const [isPhoneFrame, setIsPhoneFrame] = useState(true);
 
   // Modal State
@@ -165,12 +166,18 @@ function AppContent() {
         createdAt: Date.now() + idx,
       }));
 
+      // 1. Optimistic update in local state and offline storage
+      const updated = [...newTxs, ...transactions];
+      setTransactions(updated);
+      StorageService.saveTransactions(updated);
+
+      // 2. Sync to Firestore if user logged in
       if (user) {
-        newTxs.forEach(t => FirestoreService.saveTransaction(user.uid, t));
-      } else {
-        const updated = [...newTxs, ...transactions];
-        setTransactions(updated);
-        StorageService.saveTransactions(updated);
+        newTxs.forEach(t => {
+          FirestoreService.saveTransaction(user.uid, t).catch(err => {
+            console.error('Erro ao salvar no Firestore:', err);
+          });
+        });
       }
 
       setActiveEffect({
@@ -206,15 +213,20 @@ function AppContent() {
       showToast(`${txData.type === 'income' ? 'Receita' : 'Despesa'} de ${formatBRL(txData.amount)} salva!`);
     }
 
+    // 1. Optimistic update in local state and offline storage
+    const updated = existingId 
+      ? transactions.map(t => t.id === existingId ? newTx : t)
+      : [newTx, ...transactions];
+    setTransactions(updated);
+    StorageService.saveTransactions(updated);
+
+    // 2. Sync to Firestore if user is authenticated
     if (user) {
-      FirestoreService.saveTransaction(user.uid, newTx);
-    } else {
-      const updated = existingId 
-        ? transactions.map(t => t.id === existingId ? newTx : t)
-        : [newTx, ...transactions];
-      setTransactions(updated);
-      StorageService.saveTransactions(updated);
+      FirestoreService.saveTransaction(user.uid, newTx).catch(err => {
+        console.error('Erro ao salvar no Firestore:', err);
+      });
     }
+
     setEditingTransaction(null);
   }, [transactions, showToast, user]);
 
@@ -233,12 +245,14 @@ function AppContent() {
       createdAt: Date.now(),
     };
 
+    const updated = [newTx, ...transactions];
+    setTransactions(updated);
+    StorageService.saveTransactions(updated);
+
     if (user) {
-      FirestoreService.saveTransaction(user.uid, newTx);
-    } else {
-      const updated = [newTx, ...transactions];
-      setTransactions(updated);
-      StorageService.saveTransactions(updated);
+      FirestoreService.saveTransaction(user.uid, newTx).catch(err => {
+        console.error('Erro ao salvar preset no Firestore:', err);
+      });
     }
 
     setActiveEffect({
@@ -254,26 +268,64 @@ function AppContent() {
     const txToDelete = transactions.find(t => t.id === id);
     if (deleteEntireGroup && txToDelete?.recurringGroupId) {
       const groupTxs = transactions.filter(t => t.recurringGroupId === txToDelete.recurringGroupId);
+      const updated = transactions.filter(t => t.recurringGroupId !== txToDelete.recurringGroupId);
+      setTransactions(updated);
+      StorageService.saveTransactions(updated);
+
       if (user) {
-        groupTxs.forEach(t => FirestoreService.deleteTransaction(user.uid, t.id));
-      } else {
-        const updated = transactions.filter(t => t.recurringGroupId !== txToDelete.recurringGroupId);
-        setTransactions(updated);
-        StorageService.saveTransactions(updated);
+        groupTxs.forEach(t => {
+          FirestoreService.deleteTransaction(user.uid, t.id).catch(err => {
+            console.error('Erro ao deletar grupo no Firestore:', err);
+          });
+        });
       }
       showToast(`✓ Todas as ${groupTxs.length} parcelas do grupo foram excluídas.`);
     } else {
+      const updated = transactions.filter(t => t.id !== id);
+      setTransactions(updated);
+      StorageService.saveTransactions(updated);
+
       if (user) {
-        FirestoreService.deleteTransaction(user.uid, id);
-      } else {
-        const updated = transactions.filter(t => t.id !== id);
-        setTransactions(updated);
-        StorageService.saveTransactions(updated);
+        FirestoreService.deleteTransaction(user.uid, id).catch(err => {
+          console.error('Erro ao deletar no Firestore:', err);
+        });
       }
       showToast('Lançamento excluído.');
     }
     setEditingTransaction(null);
   }, [transactions, showToast, user]);
+
+  // Toggle paid status on transaction
+  const handleTogglePaid = useCallback((id: string) => {
+    const tx = transactions.find(t => t.id === id);
+    if (!tx) return;
+    const newPaidStatus = !tx.isPaid;
+    const updatedTx: Transaction = {
+      ...tx,
+      isPaid: newPaidStatus,
+      updatedAt: Date.now(),
+    };
+
+    // Immediate optimistic update
+    const updated = transactions.map(t => t.id === id ? updatedTx : t);
+    setTransactions(updated);
+    StorageService.saveTransactions(updated);
+
+    // Sync to Firestore if authenticated
+    if (user) {
+      FirestoreService.saveTransaction(user.uid, updatedTx).catch(err => {
+        console.error('Erro ao atualizar status pago no Firestore:', err);
+      });
+    }
+
+    showToast(newPaidStatus ? `✓ "${tx.description}" marcada como paga!` : `"${tx.description}" marcada como pendente.`);
+  }, [transactions, user, showToast]);
+
+  // Navigate to transactions tab with requested subtab view
+  const handleNavigateToTransactions = useCallback((view?: 'all' | 'future') => {
+    setTransactionsSubTab(view === 'future' ? 'future' : 'history');
+    setCurrentTab('transactions');
+  }, []);
 
   // Update Savings Goals
   const handleUpdateGoals = useCallback((newGoals: SavingsGoal[]) => {
@@ -463,6 +515,8 @@ function AppContent() {
                   onSelectTransaction={handleSelectTransaction}
                   onGoToTab={setCurrentTab}
                   onQuickAddPreset={handleQuickAddPreset}
+                  onTogglePaid={handleTogglePaid}
+                  onNavigateToTransactions={handleNavigateToTransactions}
                 />
               )}
 
@@ -483,6 +537,8 @@ function AppContent() {
                   onOpenAddModal={() => handleOpenAddModal('expense')}
                   isPro={subscription.isPro}
                   onOpenSubscription={handleOpenSubscriptionModal}
+                  defaultSubTab={transactionsSubTab}
+                  onTogglePaid={handleTogglePaid}
                 />
               )}
 

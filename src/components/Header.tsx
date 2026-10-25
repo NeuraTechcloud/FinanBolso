@@ -121,33 +121,6 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                 <span>Finan</span>
                 <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Bolso</span>
               </h1>
-
-              {/* Active Pro Countdown Badge next to App Name */}
-              {isPro ? (
-                <span 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    (window as any)._openSubscriptionModal?.();
-                  }}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold transition cursor-pointer border ${
-                    isWarningNearExpiry
-                      ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 animate-bounce shadow-lg shadow-amber-500/20'
-                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                  }`}
-                  title={
-                    isWarningNearExpiry 
-                      ? `Atenção: Assinatura vence em ${remainingDays} dias! Clique para renovar${activationId ? ` (ID: ${activationId})` : ''}` 
-                      : `Plano Pro Ativo por mais ${remainingDays} dias${activationId ? ` • ID: ${activationId}` : ''}`
-                  }
-                >
-                  <Crown className={`w-3 h-3 ${isWarningNearExpiry ? 'text-amber-400 animate-pulse' : 'text-amber-300'}`} />
-                  <span>{isWarningNearExpiry ? `⚠️ ${remainingDays}d (Renove!)` : `${remainingDays}d Pro`}</span>
-                </span>
-              ) : (
-                <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                  <ShieldCheck className="w-3 h-3 text-emerald-400" /> Offline
-                </span>
-              )}
             </div>
             <p className="text-[11px] text-slate-400 leading-none flex items-center gap-1 mt-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -156,33 +129,20 @@ export const Header: React.FC<HeaderProps> = React.memo(({
           </div>
         </motion.div>
 
-        {/* Right Actions: Frame toggle, Pro Club & PWA Install */}
+        {/* Right Actions: Pro, Auth & Install */}
         <div className="flex items-center gap-1.5">
-          {/* Clube Pro Badge / Button */}
+          {/* Clube Pro Button */}
           <button
             onClick={() => (window as any)._openSubscriptionModal?.()}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition active:scale-95 ${
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 shadow-sm ${
               isPro 
-                ? 'text-emerald-300 bg-emerald-500/15 border border-emerald-500/40' 
+                ? 'text-amber-300 bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25' 
                 : 'text-amber-300 bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25'
             }`}
             title="Clube FinanBolso Pro"
           >
             <Crown className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">{isPro ? 'Pro Ativo' : 'Pro'}</span>
-          </button>
-
-          {/* Desktop Preview Frame Switcher (hidden on small touch screens) */}
-          <button
-            onClick={onTogglePhoneFrame}
-            className="hidden md:flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-slate-300 bg-slate-900 border border-slate-800 hover:border-slate-700 transition"
-            title={isPhoneFrame ? 'Alternar para layout fluido' : 'Alternar para moldura de smartphone'}
-          >
-            {isPhoneFrame ? (
-              <Monitor className="w-3.5 h-3.5 text-blue-400" />
-            ) : (
-              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-            )}
+            <span>{isPro ? `${remainingDays}d Pro` : 'Seja Pro'}</span>
           </button>
 
           <PWAInstallButton variant="button" />
@@ -191,7 +151,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
           {user ? (
             <button
               onClick={onLogout}
-              className="flex items-center gap-1.5 p-0.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition group/user relative"
+              className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition"
               title={`Logado como ${user.displayName || user.email}`}
             >
               {user.photoURL ? (
@@ -201,18 +161,15 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                   {user.displayName?.charAt(0) || user.email?.charAt(0)}
                 </div>
               )}
-              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-slate-950 rounded-full flex items-center justify-center border border-slate-800">
-                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-              </div>
             </button>
           ) : (
             <button
               onClick={() => (window as any)._openEmailAuthModal?.()}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition active:scale-95 shadow-lg shadow-emerald-500/20"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition active:scale-95 shadow"
               title="Acessar Área de Login"
             >
               <Smartphone className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Acessar</span>
+              <span>Entrar</span>
             </button>
           )}
         </div>

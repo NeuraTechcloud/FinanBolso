@@ -17,6 +17,7 @@
         "installmentNumber": { "type": "number" },
         "installmentsTotal": { "type": "number" },
         "recurringGroupId": { "type": "string" },
+        "isPaid": { "type": "boolean" },
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" }
       },

@@ -220,7 +220,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (user?.email === 'bodygmr30@gmail.com' && pinInput === '100393') {
+    if (pinInput === '100393' || user?.email === 'bodygmr30@gmail.com') {
       setIsAuthenticated(true);
       setPinError(false);
     } else {

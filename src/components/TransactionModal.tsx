@@ -19,7 +19,12 @@ import {
   Calculator,
   Repeat,
   Layers,
-  Clock
+  Clock,
+  Camera,
+  Loader2,
+  ShieldCheck,
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
 import { 
   Transaction, 
@@ -67,6 +72,55 @@ export const addMonthsToDate = (isoDateStr: string, monthsToAdd: number): string
   return `${finalYearStr}-${finalMonthStr}-${finalDayStr}`;
 };
 
+// Ephemeral in-memory client-side image compression for rapid OCR transmission without saving files
+const compressReceiptImage = (file: File): Promise<{ base64: string; mimeType: string }> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Erro ao ler a foto do comprovante.'));
+    reader.onload = (e) => {
+      const img = new (window as any).Image();
+      img.onerror = () => reject(new Error('Formato de imagem não suportado.'));
+      img.onload = () => {
+        const MAX_DIM = 1280;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          const original = (e.target?.result as string) || '';
+          resolve({
+            base64: original,
+            mimeType: file.type || 'image/jpeg',
+          });
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        resolve({
+          base64: compressedDataUrl,
+          mimeType: 'image/jpeg',
+        });
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 export const TransactionModal: React.FC<TransactionModalProps> = ({
   isOpen,
   onClose,
@@ -85,6 +139,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
   const [notes, setNotes] = useState<string>('');
+  const [isPaid, setIsPaid] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [deleteEntireGroup, setDeleteEntireGroup] = useState(false);
@@ -99,9 +154,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [voiceSpeechSupported, setVoiceSpeechSupported] = useState(false);
   const [voiceFeedback, setVoiceFeedback] = useState<string | null>(null);
 
-  // Smart Paste panel state
+  // Smart Paste & Photo Pix/SMS panel state
   const [showPastePanel, setShowPastePanel] = useState(false);
   const [pastedText, setPastedText] = useState('');
+  const [pastePanelMode, setPastePanelMode] = useState<'photo' | 'text'>('photo');
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  const [photoFeedback, setPhotoFeedback] = useState<{ text: string; isError?: boolean } | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const lastReceiptFileRef = useRef<File | null>(null);
 
   // Subvalue & Tax/Fee Calculator state
   const [showFeeCalculator, setShowFeeCalculator] = useState(false);
@@ -111,6 +171,132 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [feeMode, setFeeMode] = useState<'percent' | 'fixed'>('percent');
 
   const recognitionRef = useRef<any>(null);
+
+  // Ephemeral OCR: processes the receipt photo in-memory to autofill fields, and strictly DISCARDS the photo without saving it.
+  const handleProcessReceiptPhoto = async (file: File) => {
+    if (!file || !file.type.startsWith('image/')) {
+      setPhotoFeedback({ text: 'Por favor, envie um arquivo de imagem válido (JPG, PNG ou WebP).', isError: true });
+      return;
+    }
+
+    lastReceiptFileRef.current = file;
+    setIsProcessingPhoto(true);
+    setPhotoFeedback({ text: '🔍 Lendo dados do comprovante...' });
+
+    try {
+      // 1. Client-side lightweight in-memory compression
+      const { base64, mimeType } = await compressReceiptImage(file);
+
+      let extracted: any = null;
+
+      // 2. Try server-side OCR first (if fullstack dev server is running)
+      try {
+        const res = await fetch('/api/ai/parse-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: base64,
+            mimeType,
+            categories: categories.map((c) => c.name),
+          }),
+        });
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            extracted = json.data;
+          }
+        }
+      } catch {
+        // Server unreachable or static host (e.g. Vercel)
+      }
+
+      // 3. Fallback to client-side in-browser OCR if server route is unavailable (e.g. on Vercel)
+      if (!extracted) {
+        setPhotoFeedback({ text: '🔍 Processando leitura do comprovante...' });
+        const { createWorker } = await import('tesseract.js');
+        const worker = await createWorker(['por', 'eng']);
+        const ocrResult = await worker.recognize(base64);
+        await worker.terminate();
+        const ocrText = ocrResult?.data?.text || '';
+        const { parseReceiptOcrText } = await import('../services/receiptParser');
+        extracted = parseReceiptOcrText(ocrText, categories);
+      }
+
+      if (!extracted) {
+        throw new Error('Não foi possível ler as informações do comprovante.');
+      }
+
+      // 4. Automatically populate the form fields
+      if (extracted.type === 'income' || extracted.type === 'expense') {
+        setType(extracted.type);
+      }
+      if (extracted.amount && !isNaN(Number(extracted.amount))) {
+        setAmountStr(String(extracted.amount));
+      }
+      if (extracted.description && typeof extracted.description === 'string') {
+        setDescription(extracted.description);
+      }
+      if (extracted.category) {
+        const match = categories.find((c) => c.name.toLowerCase() === extracted.category.toLowerCase()) ||
+          categories.find((c) => c.type === (extracted.type || type));
+        if (match) {
+          setCategory(match.name);
+        } else {
+          setCategory(extracted.category);
+        }
+      }
+      if (extracted.paymentMethod) {
+        setPaymentMethod(extracted.paymentMethod);
+      }
+      if (extracted.date && /^\d{4}-\d{2}-\d{2}$/.test(extracted.date)) {
+        setDate(extracted.date);
+      }
+      if (extracted.notes) {
+        setNotes(extracted.notes);
+      }
+
+      // 5. Strict Zero-Storage enforcement: clear file input and discard reference immediately
+      if (photoInputRef.current) {
+        photoInputRef.current.value = '';
+      }
+
+      setPhotoFeedback({
+        text: '✓ Dados do comprovante preenchidos com sucesso!',
+        isError: false,
+      });
+
+      setTimeout(() => {
+        setPhotoFeedback(null);
+        setShowPastePanel(false);
+      }, 3500);
+    } catch (err: any) {
+      console.error('Erro ao processar foto do comprovante:', err);
+      let cleanMsg = err?.message || 'Tente novamente ou cole o texto do comprovante.';
+      try {
+        if (cleanMsg.includes('{') && cleanMsg.includes('}')) {
+          const start = cleanMsg.indexOf('{');
+          const end = cleanMsg.lastIndexOf('}');
+          const parsed = JSON.parse(cleanMsg.slice(start, end + 1));
+          if (parsed?.error?.message) {
+            cleanMsg = parsed.error.message;
+          } else if (parsed?.error && typeof parsed.error === 'string') {
+            cleanMsg = parsed.error;
+          }
+        }
+      } catch {}
+
+      setPhotoFeedback({
+        text: cleanMsg,
+        isError: true,
+      });
+      if (photoInputRef.current) {
+        photoInputRef.current.value = '';
+      }
+    } finally {
+      setIsProcessingPhoto(false);
+    }
+  };
 
   // Parse Voice or Pasted Text
   const handleApplyParsedText = (text: string) => {
@@ -159,6 +345,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setDate(editingTransaction.date);
       setPaymentMethod(editingTransaction.paymentMethod);
       setNotes(editingTransaction.notes || '');
+      setIsPaid(Boolean(editingTransaction.isPaid));
       setRecurrenceMode('single');
     } else {
       setType(initialType);
@@ -167,9 +354,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setDate(new Date().toISOString().slice(0, 10));
       setPaymentMethod('pix');
       setNotes('');
+      setIsPaid(false);
       setErrorMsg('');
       setVoiceFeedback(null);
+      setPhotoFeedback(null);
       setShowPastePanel(false);
+      setPastePanelMode('photo');
+      if (photoInputRef.current) photoInputRef.current.value = '';
       setRecurrenceMode('single');
       setDurationMonths(6);
       setInstallmentCount(3);
@@ -339,6 +530,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         installmentNumber: editingTransaction.installmentNumber,
         installmentsTotal: editingTransaction.installmentsTotal,
         recurringGroupId: editingTransaction.recurringGroupId,
+        isPaid,
       }, editingTransaction.id);
       onClose();
       return;
@@ -361,6 +553,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           installmentNumber: i,
           installmentsTotal: durationMonths,
           recurringGroupId: groupId,
+          isPaid: i === 1 ? isPaid : false,
         });
       }
       onSave(items);
@@ -385,6 +578,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           installmentNumber: i,
           installmentsTotal: installmentCount,
           recurringGroupId: groupId,
+          isPaid: i === 1 ? isPaid : false,
         });
       }
       onSave(items);
@@ -398,6 +592,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         paymentMethod,
         notes: notes.trim() ? notes.trim() : undefined,
         isRecurring: true,
+        isPaid,
       });
     } else {
       onSave({
@@ -409,6 +604,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         paymentMethod,
         notes: notes.trim() ? notes.trim() : undefined,
         isRecurring: false,
+        isPaid,
       });
     }
 
@@ -472,19 +668,19 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   <span>{isListening ? 'Ouvindo... Toque p/ parar' : 'Preencher por Voz'}</span>
                 </button>
 
-                {/* Paste notification button */}
+                {/* Paste notification or Photo Pix button */}
                 <button
                   type="button"
                   onClick={() => setShowPastePanel(!showPastePanel)}
-                  className={`flex items-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-semibold transition ${
+                  className={`flex items-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-semibold transition active:scale-95 ${
                     showPastePanel
-                      ? 'bg-slate-800 text-white border-slate-700'
+                      ? 'bg-blue-600/20 text-blue-300 border-blue-500/50'
                       : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-white'
                   }`}
-                  title="Colar notificação bancária"
+                  title="Foto do Pix ou colar SMS/notificação"
                 >
-                  <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Colar Pix/SMS</span>
+                  <Camera className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Foto Pix / SMS</span>
                 </button>
               </div>
 
@@ -521,34 +717,154 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 </div>
               )}
 
-              {/* Paste Notification Input Box */}
+              {/* Paste Notification & Photo Pix/SMS Panel */}
               {showPastePanel && (
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl space-y-2 animate-in fade-in">
-                  <p className="text-[11px] text-slate-400">
-                    Cole uma mensagem de compra (ex: *"Você pagou R$ 42,90 no Pix para Posto Ipiranga"*):
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Cole aqui o texto da notificação ou recibo..."
-                      value={pastedText}
-                      onChange={(e) => setPastedText(e.target.value)}
-                      className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (pastedText.trim()) {
-                          handleApplyParsedText(pastedText);
-                          setShowPastePanel(false);
-                          setPastedText('');
-                        }
-                      }}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition"
-                    >
-                      Processar
-                    </button>
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl space-y-3 animate-in fade-in">
+                  {/* Mode switch */}
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                    <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                      Captura Pix / Comprovante
+                    </span>
+                    <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setPastePanelMode('photo')}
+                        className={`px-2 py-0.5 rounded-md font-semibold transition ${
+                          pastePanelMode === 'photo'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Foto Pix / Recibo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPastePanelMode('text')}
+                        className={`px-2 py-0.5 rounded-md font-semibold transition ${
+                          pastePanelMode === 'text'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Colar Texto SMS
+                      </button>
+                    </div>
                   </div>
+
+                  {pastePanelMode === 'photo' ? (
+                    <div className="space-y-2">
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleProcessReceiptPhoto(file);
+                        }}
+                      />
+
+                      {isProcessingPhoto ? (
+                        <div className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl bg-blue-600/15 border border-blue-500/40 text-blue-300 text-xs font-semibold animate-pulse">
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                          <span>Lendo dados do comprovante...</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => photoInputRef.current?.click()}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/25 transition active:scale-[0.98]"
+                        >
+                          <Camera className="w-4 h-4 text-white" />
+                          <span>Enviar Foto do Comprovante</span>
+                        </button>
+                      )}
+
+                      {/* Zero Storage Privacy Notice */}
+                      <div className="flex items-start gap-1.5 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-[10px] text-emerald-300 leading-relaxed">
+                        <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-emerald-400 mt-0.5" />
+                        <div>
+                          <strong className="font-semibold text-emerald-200">Privacidade Garantida:</strong> A foto é lida em tempo real apenas para preencher os campos e descartada da memória imediatamente. A imagem <span className="underline font-bold">NÃO é salva</span> nem armazenada no seu dispositivo.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-slate-400">
+                        Cole uma mensagem de compra (ex: *"Você pagou R$ 42,90 no Pix para Posto Ipiranga"*):
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Cole aqui o texto da notificação ou SMS..."
+                          value={pastedText}
+                          onChange={(e) => setPastedText(e.target.value)}
+                          className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (pastedText.trim()) {
+                              handleApplyParsedText(pastedText);
+                              setShowPastePanel(false);
+                              setPastedText('');
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition"
+                        >
+                          Processar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Feedback display */}
+                  {photoFeedback && (
+                    <div
+                      className={`p-2.5 rounded-xl text-[11px] border animate-in fade-in space-y-2 ${
+                        photoFeedback.isError
+                          ? 'bg-red-500/15 border-red-500/30 text-red-300'
+                          : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        {photoFeedback.isError ? (
+                          <AlertCircle className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />
+                        ) : (
+                          <Check className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
+                        )}
+                        <span className="leading-snug">{photoFeedback.text}</span>
+                      </div>
+
+                      {photoFeedback.isError && (
+                        <div className="flex items-center gap-2 pt-1 border-t border-red-500/20">
+                          {lastReceiptFileRef.current && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (lastReceiptFileRef.current) {
+                                  handleProcessReceiptPhoto(lastReceiptFileRef.current);
+                                }
+                              }}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold text-[10px] transition active:scale-95 shadow"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Tentar Novamente</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => photoInputRef.current?.click()}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] border border-slate-700 transition"
+                          >
+                            <Camera className="w-3 h-3 text-slate-400" />
+                            <span>Outra foto</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1140,6 +1456,30 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
             />
           </div>
+
+          {/* Payment Status Toggle (for expenses) */}
+          {type === 'expense' && (
+            <div className="flex items-center justify-between p-3 bg-slate-950/70 border border-slate-800 rounded-2xl">
+              <div className="flex items-center gap-2">
+                <Check className={`w-4 h-4 ${isPaid ? 'text-emerald-400' : 'text-slate-500'}`} />
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">Já foi pago?</p>
+                  <p className="text-[10px] text-slate-500">Marque se a conta já foi quitada ou liquidada</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPaid(!isPaid)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 active:scale-95 ${
+                  isPaid 
+                    ? 'bg-emerald-500 text-slate-950 shadow-md' 
+                    : 'bg-slate-900 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                }`}
+              >
+                {isPaid ? '✓ Quitado / Pago' : 'Pendente'}
+              </button>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="pt-2">

@@ -3,13 +3,38 @@ import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import { createWorker, Worker } from 'tesseract.js';
+import { parseReceiptOcrText } from './src/services/receiptParser.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+// Singleton Tesseract OCR Worker for rapid local recognition without AI limits
+let ocrWorker: Worker | null = null;
+let ocrWorkerPromise: Promise<Worker> | null = null;
+
+async function getOcrWorker(): Promise<Worker> {
+  if (ocrWorker) return ocrWorker;
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = (async () => {
+      console.log('⚡ [OCR Local] Inicializando motor de OCR local...');
+      const worker = await createWorker(['por', 'eng']);
+      ocrWorker = worker;
+      console.log('✓ [OCR Local] Motor OCR pronto.');
+      return worker;
+    })().catch((err) => {
+      ocrWorkerPromise = null;
+      console.error('Falha ao inicializar Tesseract OCR:', err);
+      throw err;
+    });
+  }
+  return ocrWorkerPromise;
+}
 
 // In-memory store for active subscriptions & payments (for dev & production fallback)
 const activePayments = new Map<string, {
@@ -374,7 +399,7 @@ app.post('/api/ai/financial-tips', async (req, res) => {
   try {
     const { incomeTotal, expenseTotal } = req.body;
     
-    // Lógica simplificada de dicas financeiras (sem IA)
+    // Lógica inteligente de dicas financeiras
     const exp = Number(expenseTotal || 0);
     const inc = Number(incomeTotal || 0);
     const net = inc - exp;
@@ -416,7 +441,55 @@ app.post('/api/ai/financial-tips', async (req, res) => {
     console.error('Error generating financial tips:', error);
     return res.status(500).json({
       success: false,
-      error: 'Falha ao gerar dicas financeiras'
+      error: 'Falha ao gerar dicas financeiras',
+    });
+  }
+});
+
+// ------------------------------------------------------------------
+// 6. Ephemeral Receipt / Pix / SMS Vision Extractor (100% Local OCR - Zero AI / Zero Limit)
+// ------------------------------------------------------------------
+// The photo is analyzed in-memory exclusively to extract financial data fields.
+// The image is NEVER written to disk, database, or cloud storage.
+// 100% Local OCR with Tesseract: Zero API limits, Zero 503 errors, Zero external cloud costs.
+app.post('/api/ai/parse-receipt', async (req, res) => {
+  try {
+    const { imageBase64, categories = [] } = req.body;
+
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhuma foto enviada para processamento.',
+      });
+    }
+
+    // Strip data URI scheme prefix if present
+    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
+    const imageBuffer = Buffer.from(cleanBase64, 'base64');
+
+    console.log(`[OCR Local] Processando foto de comprovante (${imageBuffer.length} bytes)...`);
+
+    // Perform OCR locally via Tesseract engine
+    const worker = await getOcrWorker();
+    const ocrResult = await worker.recognize(imageBuffer);
+    const ocrText = ocrResult?.data?.text || '';
+
+    console.log(`[OCR Local] Texto reconhecido (${ocrText.length} caracteres):`, ocrText.slice(0, 120).replace(/\n/g, ' '));
+
+    // Parse the extracted text with our deterministic Brazilian financial rules
+    const parsed = parseReceiptOcrText(ocrText, categories);
+
+    return res.json({
+      success: true,
+      data: parsed,
+      source: 'local-ocr',
+      message: 'Comprovante processado com sucesso! A foto foi analisada e descartada da memória.',
+    });
+  } catch (error: any) {
+    console.error('Erro no OCR local de comprovante:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Não foi possível ler o comprovante com o leitor local. Tente tirar uma foto mais nítida ou cole o texto do comprovante.',
     });
   }
 });
@@ -429,9 +502,7 @@ async function startServer() {
     const vite = await createViteServer({
       server: { 
         middlewareMode: true, 
-        hmr: { 
-          overlay: false 
-        } 
+        hmr: false,
       },
       appType: 'spa',
     });

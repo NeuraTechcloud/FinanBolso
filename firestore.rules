@@ -44,7 +44,7 @@ service cloud.firestore {
 
     function isValidTransaction(data) {
       return data.keys().hasAll(['id', 'type', 'amount', 'description', 'category', 'date', 'paymentMethod', 'createdAt']) &&
-             data.keys().hasOnly(['id', 'type', 'amount', 'description', 'category', 'date', 'paymentMethod', 'notes', 'isRecurring', 'installmentNumber', 'installmentsTotal', 'recurringGroupId', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['id', 'type', 'amount', 'description', 'category', 'date', 'paymentMethod', 'notes', 'isRecurring', 'installmentNumber', 'installmentsTotal', 'recurringGroupId', 'isPaid', 'createdAt', 'updatedAt']) &&
              data.id is string &&
              data.type in ['expense', 'income'] &&
              data.amount is number &&
@@ -52,6 +52,7 @@ service cloud.firestore {
              data.category is string &&
              data.date is string && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
              data.paymentMethod is string &&
+             (data.get('isPaid', false) is bool) &&
              (data.get('notes', '') is string && data.get('notes', '').size() <= 500) &&
              (data.get('installmentNumber', 1) is number) &&
              (data.get('installmentsTotal', 1) is number) &&

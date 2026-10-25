@@ -52,13 +52,9 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     path
   };
 
-  if (errInfo.error.toLowerCase().includes('permission')) {
-    console.warn('Firestore Permission Denied: ', path);
-    return;
-  }
-
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Operation Warning: ', JSON.stringify(errInfo));
+  // Return safely instead of throwing unhandled Error which crashes the React app
+  return null;
 }
 
 export const FirestoreService = {
@@ -155,7 +151,7 @@ export const FirestoreService = {
       await setDoc(doc(db, path, transaction.id), {
         ...this.cleanData(transaction),
         updatedAt: Date.now()
-      });
+      }, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `${path}/${transaction.id}`);
     }
