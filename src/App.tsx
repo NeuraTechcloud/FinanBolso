@@ -18,6 +18,7 @@ import { Wifi, Battery, Signal, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatBRL } from './services/exportService';
 import { TransactionEffectOverlay, EffectType } from './components/TransactionEffectOverlay';
+import { NotificationService } from './services/notificationService';
 import { FirebaseProvider, useFirebase } from './contexts/FirebaseContext';
 import { FirestoreService } from './services/firestore';
 
@@ -27,6 +28,17 @@ function AppContent() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  
+  // 3. Setup Notifications
+  useEffect(() => {
+    NotificationService.requestPermission();
+  }, []);
+
+  useEffect(() => {
+    if (reminders.length > 0) {
+      NotificationService.checkAndNotify(reminders);
+    }
+  }, [reminders]);
   const [subscription, setSubscription] = useState<UserSubscription>(() => StorageService.getSubscription());
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Transaction, Category, PAYMENT_METHOD_LABELS, DEFAULT_QUICK_PRESETS, QuickPreset } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
+import { useMonthTransactions } from '../../hooks/useMonthTransactions';
 import { AISmartAdvisor } from '../AISmartAdvisor';
 import { DebtQuittancePlanner } from '../DebtQuittancePlanner';
 import { DueBillsAlertBanner } from '../DueBillsAlertBanner';
@@ -122,13 +123,7 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
     return map;
   }, [categories]);
 
-  // Memoized month transactions
-  const monthTransactions = useMemo(() => {
-    return selectedMonth === 'all'
-      ? transactions
-      : transactions.filter(t => t.date.startsWith(selectedMonth));
-  }, [transactions, selectedMonth]);
-
+  const monthTransactions = useMonthTransactions(transactions, selectedMonth);
   // Current month totals memoized - Strictly separated by Liquid Cash (Salary/Bank) vs Ticket (VR/VA)
   const { 
     cashIncome, 

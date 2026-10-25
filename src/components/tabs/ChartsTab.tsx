@@ -9,6 +9,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Transaction, Category, PAYMENT_METHOD_LABELS, PaymentMethod } from '../../types/finance';
 import { formatBRL } from '../../services/exportService';
+import { useMonthTransactions } from '../../hooks/useMonthTransactions';
 
 export interface CategoryStatItem {
   name: string;
@@ -344,12 +345,7 @@ export const ChartsTab: React.FC<ChartsTabProps> = memo(({
     return map;
   }, [categories]);
 
-  // Filter transactions for currently selected month
-  const monthTransactions = useMemo(() => {
-    return selectedMonth === 'all'
-      ? transactions
-      : transactions.filter(t => t.date.startsWith(selectedMonth));
-  }, [transactions, selectedMonth]);
+  const monthTransactions = useMonthTransactions(transactions, selectedMonth);
 
   const { expenseTransactions, totalExpense, totalIncome } = useMemo(() => {
     const expenses: Transaction[] = [];

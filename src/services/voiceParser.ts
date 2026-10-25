@@ -72,25 +72,34 @@ export function parseFinancialText(
   // 4. Match Category
   let matchedCategory: string | undefined;
 
-  // Keyword dictionary for automatic categorization
-  const keywordMap: Record<string, string[]> = {
-    'Alimentação': ['almoço', 'almoco', 'jantar', 'lanche', 'comida', 'restaurante', 'ifood', 'padaria', 'mercado', 'supermercado', 'feira', 'pizza', 'café', 'cafe', 'hambúrguer', 'acougue', 'açougue', 'hortifruti', 'mcdonalds', 'burger'],
-    'Moradia & Contas': ['aluguel', 'condomínio', 'condominio', 'luz', 'água', 'agua', 'energia', 'enel', 'sabesp', 'iptu', 'gás', 'gas', 'internet', 'claro', 'vivo', 'tim'],
-    'Transporte & Combustível': ['uber', '99', 'gasolina', 'combustível', 'combustivel', 'etanol', 'posto', 'estacionamento', 'pedágio', 'pedagio', 'metrô', 'onibus', 'ônibus', 'passagem', 'ipva', 'mecânico'],
-    'Saúde & Farmácia': ['farmácia', 'farmacia', 'remédio', 'remedio', 'médico', 'medico', 'consulta', 'dentista', 'exame', 'drogaria', 'hospital', 'psicólogo', 'vitamina'],
-    'Lazer & Viagens': ['cinema', 'show', 'viagem', 'hotel', 'praia', 'bar', 'festa', 'passeio', 'churrasco', 'ingressos', 'parque'],
-    'Educação & Cursos': ['curso', 'livro', 'faculdade', 'escola', 'mensalidade', 'apostila', 'workshop', 'aula'],
-    'Compras & Vestuário': ['roupa', 'sapato', 'tênis', 'loja', 'shopee', 'shein', 'amazon', 'mercado livre', 'shopping'],
-    'Assinaturas & Serviços': ['netflix', 'spotify', 'prime', 'hbo', 'disney', 'academia', 'smart fit', 'assinatura', 'youtube'],
-    'Salário & Pro-labore': ['salário', 'salario', 'adiantamento', 'holerite', 'pro-labore', 'empresa', 'pagamento clt', 'quinzena'],
-    'Freelance & Projetos': ['freelance', 'projeto', 'consultoria', 'cliente', 'serviço prestado', 'job'],
-    'Rendimentos & Dividendos': ['dividendo', 'rendimento', 'juros', 'fii', 'ações', 'selic', 'cdi'],
-  };
-
-  for (const [catName, keywords] of Object.entries(keywordMap)) {
-    if (keywords.some(kw => lower.includes(kw))) {
-      matchedCategory = catName;
+  for (const cat of categories) {
+    if (cat.keywords && cat.keywords.some(kw => lower.includes(kw.toLowerCase()))) {
+      matchedCategory = cat.name;
       break;
+    }
+  }
+
+  // Fallback to old keywords if no match found via new dynamic keyword system
+  if (!matchedCategory) {
+    const keywordMap: Record<string, string[]> = {
+      'Alimentação': ['almoço', 'almoco', 'jantar', 'lanche', 'comida', 'restaurante', 'ifood', 'padaria', 'mercado', 'supermercado', 'feira', 'pizza', 'café', 'cafe', 'hambúrguer', 'acougue', 'açougue', 'hortifruti', 'mcdonalds', 'burger'],
+      'Moradia & Contas': ['aluguel', 'condomínio', 'condominio', 'luz', 'água', 'agua', 'energia', 'enel', 'sabesp', 'iptu', 'gás', 'gas', 'internet', 'claro', 'vivo', 'tim'],
+      'Transporte & Combustível': ['uber', '99', 'gasolina', 'combustível', 'combustivel', 'etanol', 'posto', 'estacionamento', 'pedágio', 'pedagio', 'metrô', 'onibus', 'ônibus', 'passagem', 'ipva', 'mecânico'],
+      'Saúde & Farmácia': ['farmácia', 'farmacia', 'remédio', 'remedio', 'médico', 'medico', 'consulta', 'dentista', 'exame', 'drogaria', 'hospital', 'psicólogo', 'vitamina'],
+      'Lazer & Viagens': ['cinema', 'show', 'viagem', 'hotel', 'praia', 'bar', 'festa', 'passeio', 'churrasco', 'ingressos', 'parque'],
+      'Educação & Cursos': ['curso', 'livro', 'faculdade', 'escola', 'mensalidade', 'apostila', 'workshop', 'aula'],
+      'Compras & Vestuário': ['roupa', 'sapato', 'tênis', 'loja', 'shopee', 'shein', 'amazon', 'mercado livre', 'shopping'],
+      'Assinaturas & Serviços': ['netflix', 'spotify', 'prime', 'hbo', 'disney', 'academia', 'smart fit', 'assinatura', 'youtube'],
+      'Salário & Pro-labore': ['salário', 'salario', 'adiantamento', 'holerite', 'pro-labore', 'empresa', 'pagamento clt', 'quinzena'],
+      'Freelance & Projetos': ['freelance', 'projeto', 'consultoria', 'cliente', 'serviço prestado', 'job'],
+      'Rendimentos & Dividendos': ['dividendo', 'rendimento', 'juros', 'fii', 'ações', 'selic', 'cdi'],
+    };
+
+    for (const [catName, keywords] of Object.entries(keywordMap)) {
+      if (keywords.some(kw => lower.includes(kw))) {
+        matchedCategory = catName;
+        break;
+      }
     }
   }
 

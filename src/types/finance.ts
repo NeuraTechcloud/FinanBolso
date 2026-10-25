@@ -17,6 +17,7 @@ export interface Category {
   color: string;
   icon: string;
   monthlyBudget?: number;
+  keywords?: string[];
 }
 
 export interface Transaction {

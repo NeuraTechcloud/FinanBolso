@@ -346,7 +346,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setPaymentMethod(editingTransaction.paymentMethod);
       setNotes(editingTransaction.notes || '');
       setIsPaid(Boolean(editingTransaction.isPaid));
-      setRecurrenceMode('single');
+      setRecurrenceMode(editingTransaction.isRecurring ? 'indefinite' : 'single');
     } else {
       setType(initialType);
       setAmountStr('');
@@ -1302,7 +1302,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       <input
                         type="number"
                         min={2}
-                        max={60}
+                        max={500}
                         value={durationMonths}
                         onChange={(e) => setDurationMonths(Math.max(2, parseInt(e.target.value) || 2))}
                         className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center font-bold text-xs text-white"
@@ -1362,7 +1362,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       <input
                         type="number"
                         min={2}
-                        max={48}
+                        max={500}
                         value={installmentCount}
                         onChange={(e) => setInstallmentCount(Math.max(2, parseInt(e.target.value) || 2))}
                         className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center font-bold text-xs text-white"
