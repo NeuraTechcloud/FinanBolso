@@ -1,6 +1,6 @@
 {
-  "name": "FinanBolso - Controle Financeiro Pessoal VIP",
-  "description": "Aplicativo móvel completo para celular de controle financeiro com gráficos detalhados de gastos mensais, salvamento offline no próprio celular e exportação de dados para Excel e PDF.",
+  "name": "BolsoZen - Gestão Financeira Inteligente & Tranquila",
+  "description": "Aplicativo de gestão e controle financeiro pessoal com equilíbrio, saldos separados por conta e ticket, extratos detalhados e inteligência financeira.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

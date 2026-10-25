@@ -218,78 +218,84 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
 
   return (
     <div className="space-y-4 pb-24 animate-in fade-in">
-      {/* Main Account Balance Card (Conta Corrente / Salário Líquido em Dinheiro) */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40 border border-slate-800 p-5 shadow-xl">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      {/* Top Cards Section: Responsive 2-Column Grid on Desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Main Account Balance Card (Conta Corrente / Salário Líquido em Dinheiro) */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40 border border-slate-800 p-5 shadow-xl flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5 text-xs text-slate-400">
-            <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Saldo em Conta (Salário Líquido)</span>
-          </div>
-          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700/60">
-            {cashIncome > 0 ? `${savingsRate.toFixed(0)}% Economizado` : 'Sem lançamentos'}
-          </span>
-        </div>
-
-        <div className="flex items-baseline gap-2 mb-3">
-          <span className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums ${cashNetBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
-            {formatBRL(cashNetBalance)}
-          </span>
-        </div>
-
-        {/* Income & Expense Split Badges for Cash */}
-        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-800/80">
-          <div className="bg-slate-950/50 rounded-2xl p-3 border border-slate-800/60 flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
-              <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Saldo em Conta (Salário Líquido)</span>
+              </div>
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700/60">
+                {cashIncome > 0 ? `${savingsRate.toFixed(0)}% Economizado` : 'Sem lançamentos'}
+              </span>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Salário / Receitas</p>
-              <p className="text-sm font-bold text-emerald-400 truncate tabular-nums">{formatBRL(cashIncome)}</p>
+
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums ${cashNetBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
+                {formatBRL(cashNetBalance)}
+              </span>
             </div>
           </div>
 
-          <div className="bg-slate-950/50 rounded-2xl p-3 border border-slate-800/60 flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-red-500/15 text-red-400 flex items-center justify-center shrink-0">
-              <ArrowDownRight className="w-4 h-4 stroke-[2.5]" />
+          {/* Income & Expense Split Badges for Cash */}
+          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-800/80">
+            <div className="bg-slate-950/50 rounded-2xl p-3 border border-slate-800/60 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+                <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Salário / Receitas</p>
+                <p className="text-sm font-bold text-emerald-400 truncate tabular-nums">{formatBRL(cashIncome)}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Contas / Despesas</p>
-              <p className="text-sm font-bold text-red-400 truncate tabular-nums">{formatBRL(cashExpense)}</p>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* 💳 Dedicated Ticket / Benefícios (VR / VA) Balance Card */}
-      <div className="p-4 rounded-3xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/30 shadow-lg space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
-              <Utensils className="w-4 h-4" />
+            <div className="bg-slate-950/50 rounded-2xl p-3 border border-slate-800/60 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-red-500/15 text-red-400 flex items-center justify-center shrink-0">
+                <ArrowDownRight className="w-4 h-4 stroke-[2.5]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Contas / Despesas</p>
+                <p className="text-sm font-bold text-red-400 truncate tabular-nums">{formatBRL(cashExpense)}</p>
+              </div>
             </div>
-            <div>
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                Saldo em Tickets & Benefícios (VR / VA)
-              </h4>
-              <p className="text-[10px] text-slate-400">Separado da sua conta de dinheiro e salário</p>
-            </div>
-          </div>
-
-          <div className="text-right">
-            <p className={`text-base font-extrabold tabular-nums ${ticketNetBalance >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
-              {formatBRL(ticketNetBalance)}
-            </p>
           </div>
         </div>
 
-        {(ticketIncome > 0 || ticketExpense > 0) && (
-          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-800/80">
-            <span>Recebido no Mês: <strong className="text-emerald-400 tabular-nums">+{formatBRL(ticketIncome)}</strong></span>
-            <span>Gasto em Refeição/Mercado: <strong className="text-amber-400 tabular-nums">-{formatBRL(ticketExpense)}</strong></span>
+        {/* 💳 Dedicated Ticket / Benefícios (VR / VA) Balance Card */}
+        <div className="p-5 rounded-3xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/30 shadow-lg flex flex-col justify-between space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                <Utensils className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                  Saldo em Tickets & Benefícios (VR / VA)
+                </h4>
+                <p className="text-[10px] text-slate-400">Isolado do dinheiro em conta corrente e salário</p>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <p className={`text-xl font-extrabold tabular-nums ${ticketNetBalance >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
+                {formatBRL(ticketNetBalance)}
+              </p>
+            </div>
           </div>
-        )}
+
+          <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800/80 space-y-1">
+            <p className="text-[10px] text-slate-400 font-medium">Uso no mês vigente:</p>
+            <div className="flex items-center justify-between text-xs text-slate-300">
+              <span>Créditos de Benefício: <strong className="text-emerald-400 tabular-nums">+{formatBRL(ticketIncome)}</strong></span>
+              <span>Refeição & Mercado: <strong className="text-amber-400 tabular-nums">-{formatBRL(ticketExpense)}</strong></span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Due Bills & Overdue Bills Alert Banner */}

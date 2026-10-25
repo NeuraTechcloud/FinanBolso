@@ -37,7 +37,12 @@ function AppContent() {
   });
   const [currentTab, setCurrentTab] = useState<TabType>('home');
   const [transactionsSubTab, setTransactionsSubTab] = useState<'history' | 'future'>('history');
-  const [isPhoneFrame, setIsPhoneFrame] = useState(true);
+  const [isPhoneFrame, setIsPhoneFrame] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      return false;
+    }
+    return true;
+  });
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -469,7 +474,7 @@ function AppContent() {
         className={`w-full transition-all duration-300 flex flex-col relative h-[100dvh] overflow-hidden ${
           isPhoneFrame 
             ? 'max-w-md md:h-[860px] md:max-h-[92vh] md:rounded-[42px] md:border-[10px] md:border-slate-800 md:shadow-2xl md:shadow-emerald-950/40 bg-slate-950' 
-            : 'max-w-4xl bg-slate-950'
+            : 'max-w-6xl xl:max-w-7xl md:h-[95vh] md:max-h-[920px] md:my-auto md:rounded-3xl md:border md:border-slate-800 md:shadow-2xl md:shadow-emerald-950/30 bg-slate-950'
         }`}
       >
         {/* Mobile Phone Mockup Status Bar on Desktop */}

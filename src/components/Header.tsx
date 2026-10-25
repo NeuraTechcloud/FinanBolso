@@ -12,7 +12,6 @@ import {
   LogOut
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { PWAInstallButton } from './PWAInstallButton';
 import { HapticService } from '../services/haptics';
 import { User } from 'firebase/auth';
 
@@ -118,19 +117,40 @@ export const Header: React.FC<HeaderProps> = React.memo(({
           <div>
             <div className="flex items-center gap-1.5">
               <h1 className="font-extrabold text-white text-base leading-tight tracking-tight flex items-center">
-                <span>Finan</span>
-                <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Bolso</span>
+                <span>Bolso</span>
+                <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300 bg-clip-text text-transparent">Zen</span>
               </h1>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-widest">
+                ZEN
+              </span>
             </div>
-            <p className="text-[11px] text-slate-400 leading-none flex items-center gap-1 mt-0.5">
+            <p className="text-[10px] text-slate-400 leading-none flex items-center gap-1 mt-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Controle Pessoal</span>
+              <span>Tranquilidade Financeira</span>
             </p>
           </div>
         </motion.div>
 
-        {/* Right Actions: Pro, Auth & Install */}
+        {/* Right Actions: Pro, Auth, Frame Toggle & Install */}
         <div className="flex items-center gap-1.5">
+          {/* Desktop/Mobile Device Viewport Toggle (visible on desktop) */}
+          <button
+            onClick={onTogglePhoneFrame}
+            className="hidden md:flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition active:scale-95"
+            title={isPhoneFrame ? "Expandir para Visão Computador" : "Simular Aparelho Celular"}
+          >
+            {isPhoneFrame ? (
+              <>
+                <Monitor className="w-3.5 h-3.5 text-teal-400" />
+                <span className="text-[11px]">Visão PC</span>
+              </>
+            ) : (
+              <>
+                <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[11px]">Visão Celular</span>
+              </>
+            )}
+          </button>
           {/* Clube Pro Button */}
           <button
             onClick={() => (window as any)._openSubscriptionModal?.()}
@@ -145,7 +165,6 @@ export const Header: React.FC<HeaderProps> = React.memo(({
             <span>{isPro ? `${remainingDays}d Pro` : 'Seja Pro'}</span>
           </button>
 
-          <PWAInstallButton variant="button" />
 
           {/* Firebase Auth Button */}
           {user ? (

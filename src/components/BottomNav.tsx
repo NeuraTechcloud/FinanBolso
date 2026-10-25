@@ -94,7 +94,7 @@ export const BottomNav: React.FC<BottomNavProps> = memo(({
         className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/80 px-2 py-1 transition-all gpu-layer select-none"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.35rem)' }}
       >
-        <div className="max-w-md mx-auto flex items-center justify-around">
+        <div className="max-w-md md:max-w-xl mx-auto flex items-center justify-around">
           {tabs.map((tab) => (
             <MemoizedTabButton
               key={tab.id}
