@@ -16,7 +16,8 @@ import {
   Smartphone,
   Fingerprint,
   CheckCheck,
-  Trash2
+  Trash2,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PaymentService, PaymentPreferenceResponse } from '../services/paymentService';
@@ -530,29 +531,32 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 ))}
               </div>
 
-              {/* Subscribe CTA */}
-              <button
-                type="button"
-                onClick={handleStartCheckout}
-                disabled={isProcessing}
-                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 active:scale-95 transition"
-              >
-                {isProcessing ? (
-                  <span className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                    <span>Gerando Cobrança Pix...</span>
-                  </span>
+              {/* Subscribe CTA via Mercado Pago Direct Links */}
+              <div className="pt-2">
+                {selectedPlan === 'monthly' ? (
+                  <a
+                    href="https://mpago.la/2MrsEPU"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 active:scale-95 transition group"
+                  >
+                    <Crown className="w-4 h-4 fill-slate-950 group-hover:scale-110 transition" />
+                    <span>Assinar Plano Mensal via Mercado Pago (R$ 9,90 • 30 Dias)</span>
+                    <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                  </a>
                 ) : (
-                  <>
-                    <Crown className="w-4 h-4" />
-                    <span>
-                      {selectedPlan === 'yearly' 
-                        ? 'Pagar com Pix Anual (R$ 79,90 • 365 Dias)' 
-                        : 'Pagar com Pix Mensal (R$ 9,90 • 30 Dias)'}
-                    </span>
-                  </>
+                  <a
+                    href="https://mpago.la/18RNtwt"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 active:scale-95 transition group"
+                  >
+                    <Crown className="w-4 h-4 fill-slate-950 group-hover:scale-110 transition" />
+                    <span>Assinar Plano Anual via Mercado Pago (R$ 79,90 • 365 Dias)</span>
+                    <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                  </a>
                 )}
-              </button>
+              </div>
             </>
           )}
         </div>

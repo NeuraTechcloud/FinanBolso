@@ -59,6 +59,166 @@ function generateKeySegment(len = 4) {
 }
 
 // ------------------------------------------------------------------
+// Mercado Pago Integration & Subscription Management
+// ------------------------------------------------------------------
+
+// Check Mercado Pago configuration status
+app.get('/api/mercadopago/status', (_req, res) => {
+  const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  const isConfigured = Boolean(token && token.trim().length > 10 && !token.includes('YOUR_'));
+  return res.json({
+    configured: isConfigured,
+    mode: isConfigured ? (token?.startsWith('APP_USR-') ? 'production' : 'sandbox') : 'demo_fallback',
+    maskedToken: isConfigured ? `${token?.slice(0, 10)}...${token?.slice(-4)}` : null,
+  });
+});
+
+// Create Mercado Pago Preapproval Subscription Plan (/preapproval_plan)
+app.post('/api/mercadopago/create-subscription-plan', async (req, res) => {
+  try {
+    const mpAccessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+    const {
+      reason = 'Plano FinanBolso Pro',
+      transaction_amount = 9.90,
+      currency_id = 'BRL',
+      frequency = 1,
+      frequency_type = 'months',
+      repetitions,
+      billing_day,
+      billing_day_proportional,
+      free_trial,
+      back_url = process.env.APP_URL || 'https://finanbolso.app',
+    } = req.body;
+
+    if (!mpAccessToken || mpAccessToken.includes('YOUR_')) {
+      // Demo response when access token is not yet configured in environment
+      const mockPlanId = `plan_demo_${Date.now()}`;
+      return res.json({
+        success: true,
+        mode: 'demo',
+        plan: {
+          id: mockPlanId,
+          reason,
+          auto_recurring: {
+            frequency: Number(frequency),
+            frequency_type,
+            transaction_amount: Number(transaction_amount),
+            currency_id,
+          },
+          init_point: `${back_url}?plan_id=${mockPlanId}`,
+          status: 'active',
+          message: 'Modo Demonstração: Adicione MERCADO_PAGO_ACCESS_TOKEN em seu arquivo .env para gerar planos reais na API do Mercado Pago.',
+        },
+      });
+    }
+
+    const mpBody: Record<string, any> = {
+      reason,
+      auto_recurring: {
+        frequency: Number(frequency),
+        frequency_type,
+        transaction_amount: Number(transaction_amount),
+        currency_id,
+      },
+      back_url,
+    };
+
+    if (repetitions !== undefined) mpBody.auto_recurring.repetitions = Number(repetitions);
+    if (billing_day !== undefined) mpBody.auto_recurring.billing_day = Number(billing_day);
+    if (billing_day_proportional !== undefined) mpBody.auto_recurring.billing_day_proportional = Boolean(billing_day_proportional);
+    if (free_trial) mpBody.auto_recurring.free_trial = free_trial;
+
+    const mpResponse = await fetch('https://api.mercadopago.com/preapproval_plan', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${mpAccessToken}`,
+      },
+      body: JSON.stringify(mpBody),
+    });
+
+    const mpData = await mpResponse.json();
+
+    if (!mpResponse.ok) {
+      console.error('Mercado Pago API Error:', mpData);
+      return res.status(mpResponse.status).json({
+        success: false,
+        error: mpData.message || mpData.error || 'Erro ao criar plano de assinatura no Mercado Pago',
+        details: mpData,
+      });
+    }
+
+    return res.json({
+      success: true,
+      mode: 'production',
+      plan: mpData,
+    });
+  } catch (error: any) {
+    console.error('Error creating subscription plan:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Falha ao conectar com Mercado Pago' });
+  }
+});
+
+// Create Individual Mercado Pago Subscription / Preapproval (/preapproval)
+app.post('/api/mercadopago/create-subscription', async (req, res) => {
+  try {
+    const mpAccessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+    const {
+      preapproval_plan_id,
+      payer_email,
+      back_url = process.env.APP_URL || 'https://finanbolso.app',
+      card_token_id,
+      reason = 'Assinatura FinanBolso Pro',
+    } = req.body;
+
+    if (!mpAccessToken || mpAccessToken.includes('YOUR_')) {
+      return res.json({
+        success: true,
+        mode: 'demo',
+        init_point: `${back_url}?status=approved_demo`,
+        message: 'Modo Demonstração: Configure MERCADO_PAGO_ACCESS_TOKEN para links reais.',
+      });
+    }
+
+    const mpBody: Record<string, any> = {
+      payer_email: payer_email || 'cliente@finanbolso.app',
+      back_url,
+      reason,
+    };
+    if (preapproval_plan_id) mpBody.preapproval_plan_id = preapproval_plan_id;
+    if (card_token_id) mpBody.card_token_id = card_token_id;
+
+    const mpResponse = await fetch('https://api.mercadopago.com/preapproval', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${mpAccessToken}`,
+      },
+      body: JSON.stringify(mpBody),
+    });
+
+    const mpData = await mpResponse.json();
+
+    if (!mpResponse.ok) {
+      return res.status(mpResponse.status).json({
+        success: false,
+        error: mpData.message || 'Erro ao criar assinatura',
+        details: mpData,
+      });
+    }
+
+    return res.json({
+      success: true,
+      mode: 'production',
+      subscription: mpData,
+      init_point: mpData.init_point,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ------------------------------------------------------------------
 // 1. Create Payment Preference (Mercado Pago / Pix Integration)
 // ------------------------------------------------------------------
 app.post('/api/checkout/create-preference', async (req, res) => {

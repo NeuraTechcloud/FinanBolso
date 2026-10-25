@@ -71,5 +71,61 @@ export const PaymentService = {
     } catch {
       return { success: false };
     }
+  },
+
+  // Check Mercado Pago configuration status on backend
+  async getMercadoPagoStatus(): Promise<{ configured: boolean; mode: string; maskedToken: string | null }> {
+    try {
+      const response = await fetch('/api/mercadopago/status');
+      if (response.ok) return await response.json();
+      return { configured: false, mode: 'demo_fallback', maskedToken: null };
+    } catch {
+      return { configured: false, mode: 'demo_fallback', maskedToken: null };
+    }
+  },
+
+  // Create Mercado Pago Preapproval Subscription Plan (/preapproval_plan)
+  async createSubscriptionPlan(planData: {
+    reason: string;
+    transaction_amount: number;
+    currency_id?: string;
+    frequency?: number;
+    frequency_type?: 'months' | 'days';
+    repetitions?: number;
+    billing_day?: number;
+    billing_day_proportional?: boolean;
+    free_trial?: { frequency: number; frequency_type: 'months' | 'days' };
+    back_url?: string;
+  }): Promise<{ success: boolean; mode?: string; plan?: any; error?: string }> {
+    try {
+      const response = await fetch('/api/mercadopago/create-subscription-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(planData),
+      });
+      return await response.json();
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Falha ao conectar com o servidor' };
+    }
+  },
+
+  // Create Mercado Pago Individual Subscription Link (/preapproval)
+  async createSubscription(subData: {
+    preapproval_plan_id?: string;
+    payer_email?: string;
+    back_url?: string;
+    reason?: string;
+  }): Promise<{ success: boolean; mode?: string; subscription?: any; init_point?: string; error?: string }> {
+    try {
+      const response = await fetch('/api/mercadopago/create-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subData),
+      });
+      return await response.json();
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Falha ao conectar com o servidor' };
+    }
   }
 };
+
