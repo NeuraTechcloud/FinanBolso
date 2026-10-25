@@ -46,7 +46,18 @@ const MemoizedTransactionRow = memo<TransactionRowProps>(({ tx, categoryColor, o
         </div>
 
         <div className="min-w-0">
-          <p className="text-xs font-bold text-white truncate">{tx.description}</p>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="text-xs font-bold text-white truncate">{tx.description}</p>
+            {tx.installmentsTotal && tx.installmentsTotal > 1 ? (
+              <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
+                {tx.installmentNumber}/{tx.installmentsTotal}
+              </span>
+            ) : tx.isRecurring ? (
+              <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 shrink-0">
+                Fixo
+              </span>
+            ) : null}
+          </div>
           <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
             <span
               className="w-2 h-2 rounded-full inline-block shrink-0"
@@ -132,8 +143,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
 
       return true;
     }).sort((a, b) => {
-      if (sortBy === 'date-desc') return new Date(b.date).getTime() - new Date(a.date).getTime();
-      if (sortBy === 'date-asc') return new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (sortBy === 'date-desc') return b.date.localeCompare(a.date);
+      if (sortBy === 'date-asc') return a.date.localeCompare(b.date);
       if (sortBy === 'amount-desc') return b.amount - a.amount;
       if (sortBy === 'amount-asc') return a.amount - b.amount;
       return 0;

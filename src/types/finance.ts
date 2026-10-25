@@ -27,6 +27,9 @@ export interface Transaction {
   paymentMethod: PaymentMethod;
   notes?: string;
   isRecurring?: boolean;
+  installmentNumber?: number;
+  installmentsTotal?: number;
+  recurringGroupId?: string;
   createdAt: number;
   updatedAt?: number;
 }

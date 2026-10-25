@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ShieldAlert, 
   KeyRound, 
@@ -22,7 +22,8 @@ import {
   Mail,
   Clock,
   UserCheck,
-  Crown
+  Crown,
+  AlertTriangle
 } from 'lucide-react';
 import { PaymentIntegrationGuide } from './PaymentIntegrationGuide';
 import { formatBRL, formatDateBR } from '../services/exportService';
@@ -103,12 +104,51 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
   // Key generator state
-  const [generatedKeys, setGeneratedKeys] = useState<Array<{ id: string; key: string; duration: 30 | 365; createdAt: string; usedBy?: string | null; usedAt?: number | null }>>([]);
+  const [generatedKeys, setGeneratedKeys] = useState<Array<{ id: string; key: string; duration: 30 | 365; createdAt: string; usedBy?: string | null; usedAt?: number | null }>>(() => {
+    return ActivationService.getAuthorizedKeys().map((lk: any) => ({
+      id: `key-local-${lk.key}`,
+      key: lk.key,
+      duration: lk.durationDays,
+      createdAt: lk.label || `Chave ${lk.durationDays}d`,
+      usedBy: lk.usedBy || null,
+      usedAt: lk.usedAt || null,
+    }));
+  });
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  
+  // Track keys deleted in this session so real-time snapshots don't revive them
+  const deletedKeysRef = useRef<Set<string>>(new Set());
+
+  // In-app deletion confirmation modal state (safe in iframe environments)
+  const [pendingDelete, setPendingDelete] = useState<{
+    type: 'key' | 'user' | 'subscriber';
+    id: string;
+    title: string;
+    description: string;
+    payload?: any;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Firestore Real-time Subscriptions
   useEffect(() => {
     if (!isOpen || !isAuthenticated) return;
+
+    // Immediately load local keys so there is never an empty state
+    const currentLocal = ActivationService.getAuthorizedKeys();
+    if (currentLocal.length > 0) {
+      setGeneratedKeys(
+        currentLocal
+          .filter((lk: any) => lk && lk.key && !deletedKeysRef.current.has(lk.key.toUpperCase()))
+          .map((lk: any) => ({
+            id: `key-local-${lk.key}`,
+            key: lk.key,
+            duration: lk.durationDays,
+            createdAt: lk.label || `Chave ${lk.durationDays}d`,
+            usedBy: lk.usedBy || null,
+            usedAt: lk.usedAt || null,
+          }))
+      );
+    }
 
     setIsSyncing(true);
     
@@ -127,28 +167,34 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
       // Load local cache keys
       localKeys.forEach((lk: any) => {
         if (lk && lk.key) {
-          keyMap.set(lk.key.toUpperCase(), {
-            id: `key-local-${lk.key}`,
-            key: lk.key,
-            duration: lk.durationDays,
-            createdAt: lk.label || `Chave ${lk.durationDays}d`,
-            usedBy: lk.usedBy || null,
-            usedAt: lk.usedAt || null,
-          });
+          const upperKey = lk.key.toUpperCase();
+          if (!deletedKeysRef.current.has(upperKey)) {
+            keyMap.set(upperKey, {
+              id: `key-local-${lk.key}`,
+              key: lk.key,
+              duration: lk.durationDays,
+              createdAt: lk.label || `Chave ${lk.durationDays}d`,
+              usedBy: lk.usedBy || null,
+              usedAt: lk.usedAt || null,
+            });
+          }
         }
       });
 
       // Override with live Firestore keys
       keys.forEach((k: any) => {
         if (k && k.key) {
-          keyMap.set(k.key.toUpperCase(), {
-            id: `key-firestore-${k.key}`,
-            key: k.key,
-            duration: k.durationDays,
-            createdAt: k.label || `Chave ${k.durationDays}d`,
-            usedBy: k.usedBy || null,
-            usedAt: k.usedAt || null,
-          });
+          const upperKey = k.key.toUpperCase();
+          if (!deletedKeysRef.current.has(upperKey)) {
+            keyMap.set(upperKey, {
+              id: `key-firestore-${k.key}`,
+              key: k.key,
+              duration: k.durationDays,
+              createdAt: k.label || `Chave ${k.durationDays}d`,
+              usedBy: k.usedBy || null,
+              usedAt: k.usedAt || null,
+            });
+          }
         }
       });
 
@@ -217,10 +263,12 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   };
 
   const handleDeleteGeneratedKey = (keyToDelete: string) => {
-    if (!window.confirm(`Excluir chave ${keyToDelete}?`)) return;
-    setGeneratedKeys(generatedKeys.filter(k => k.key !== keyToDelete));
-    ActivationService.deleteAuthorizedKey(keyToDelete);
-    showMsg(`✓ Chave ${keyToDelete} excluída com sucesso.`);
+    setPendingDelete({
+      type: 'key',
+      id: keyToDelete,
+      title: 'Excluir Chave de Ativação',
+      description: `Tem certeza que deseja excluir permanentemente a chave "${keyToDelete}"? Ela será removida do servidor e nenhum dispositivo poderá utilizá-la.`,
+    });
   };
 
   const handleAddSubscriber = async (e: React.FormEvent) => {
@@ -352,15 +400,14 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
     setAppUsers(appUsers.map(user => user.uid === u.uid ? { ...user, subscription: userSub } : user));
   };
 
-  const handleDeleteUser = async (u: AppUser) => {
-    if (!window.confirm(`Deseja realmente excluir o usuário ${u.displayName || u.email}? Esta ação não pode ser desfeita.`)) return;
-    try {
-      await FirestoreService.deleteUser(u.uid);
-      showMsg(`✓ Usuário ${u.displayName || u.email} excluído com sucesso.`);
-      setAppUsers(appUsers.filter(user => user.uid !== u.uid));
-    } catch (err) {
-      showMsg(`Erro ao excluir usuário: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
-    }
+  const handleDeleteUser = (u: AppUser) => {
+    setPendingDelete({
+      type: 'user',
+      id: u.uid,
+      title: 'Excluir Conta de Usuário',
+      description: `Deseja realmente excluir permanentemente a conta de "${u.displayName || u.email}"? Esta ação removerá o registro do Firestore e não pode ser desfeita.`,
+      payload: u,
+    });
   };
 
   const handleRevokeUserPro = async (u: AppUser) => {
@@ -389,27 +436,64 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
     setAppUsers(appUsers.map(user => user.uid === u.uid ? { ...user, subscription: userSub } : user));
   };
 
-  const handleDeleteSubscriber = async (id: string) => {
-    if (!window.confirm('Deseja realmente excluir este registro de dispositivo?')) return;
+  const handleDeleteSubscriber = (id: string) => {
+    setPendingDelete({
+      type: 'subscriber',
+      id,
+      title: 'Excluir Registro de Dispositivo',
+      description: `Deseja realmente excluir este registro de dispositivo (${id})?`,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) return;
+    setIsDeleting(true);
+    const target = pendingDelete;
     try {
-      await FirestoreService.deleteDevice(id);
-      showMsg(`✓ Dispositivo ${id} excluído com sucesso.`);
+      if (target.type === 'key') {
+        const cleanKey = target.id.trim().toUpperCase();
+        deletedKeysRef.current.add(cleanKey);
+        setGeneratedKeys(prev => prev.filter(k => k.key.toUpperCase() !== cleanKey));
+        await ActivationService.deleteAuthorizedKey(cleanKey);
+        showMsg(`✓ Chave ${cleanKey} excluída com sucesso.`);
+      } else if (target.type === 'user') {
+        const u = target.payload as AppUser;
+        await FirestoreService.deleteUser(u.uid);
+        setAppUsers(prev => prev.filter(user => user.uid !== u.uid));
+        showMsg(`✓ Usuário ${u.displayName || u.email} excluído.`);
+      } else if (target.type === 'subscriber') {
+        await FirestoreService.deleteDevice(target.id);
+        setSubscribers(prev => prev.filter(s => s.id !== target.id));
+        showMsg('✓ Registro de dispositivo excluído.');
+      }
     } catch (err) {
-      showMsg(`Erro ao excluir: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+      console.error('Error during deletion:', err);
+      showMsg('Erro ao excluir item.');
+    } finally {
+      setIsDeleting(false);
+      setPendingDelete(null);
     }
   };
 
-  // Calculate stats
-  const totalSubscribersCount = subscribers.length;
-  const activeProCount = subscribers.filter(s => s.status === 'Ativo' && s.plan !== 'Gratuito').length;
-  const totalAssetsUnderManagement = subscribers.reduce((acc, s) => acc + (s.managedAssetsValue || 0), 0);
-  const simulatedMRR = subscribers.reduce((acc, s) => {
-    if (s.status !== 'Ativo') return acc;
-    if (s.plan === 'Pro Mensal') return acc + 29.90;
-    if (s.plan === 'Pro Anual') return acc + 199.90 / 12;
-    if (s.plan === 'Enterprise') return acc + 99.90;
-    return acc;
-  }, 0);
+  // Calculate stats with useMemo for smooth performance
+  const { totalSubscribersCount, activeProCount, totalAssetsUnderManagement, simulatedMRR } = useMemo(() => {
+    const totalCount = subscribers.length;
+    const proCount = subscribers.filter(s => s.status === 'Ativo' && s.plan !== 'Gratuito').length;
+    const assets = subscribers.reduce((acc, s) => acc + (s.managedAssetsValue || 0), 0);
+    const mrr = subscribers.reduce((acc, s) => {
+      if (s.status !== 'Ativo') return acc;
+      if (s.plan === 'Pro Mensal') return acc + 29.90;
+      if (s.plan === 'Pro Anual') return acc + 199.90 / 12;
+      if (s.plan === 'Enterprise') return acc + 99.90;
+      return acc;
+    }, 0);
+    return {
+      totalSubscribersCount: totalCount,
+      activeProCount: proCount,
+      totalAssetsUnderManagement: assets,
+      simulatedMRR: mrr
+    };
+  }, [subscribers]);
 
   return (
     <AnimatePresence>
@@ -771,31 +855,44 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Chaves Ativas no Servidor</h4>
                     <span className="text-[10px] font-bold text-emerald-400">{generatedKeys.length} Licenças</span>
                   </div>
-                  <div className="divide-y divide-slate-800 max-h-60 overflow-y-auto mobile-scroll">
+                  <div className="divide-y divide-slate-800/80 max-h-72 overflow-y-auto mobile-scroll">
                     {generatedKeys.length === 0 ? (
                       <div className="p-8 text-center text-slate-500 text-xs font-medium">
                         Nenhuma chave ativa disponível.
                       </div>
                     ) : (
                       generatedKeys.map((k) => {
-                        // Assuming keys are fetched via subscribeActivationKeys and stored in generatedKeys
-                        // We need to access the key data to see usedBy
                         const isUsed = !!k.usedBy;
                         return (
-                          <div key={k.id} className="p-3 flex items-center justify-between hover:bg-slate-900/50 transition">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className={`text-xs font-mono font-bold ${isUsed ? 'text-slate-500 line-through' : 'text-white'}`}>{k.key}</span>
-                                <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                                  k.duration === 365 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'
-                                }`}>
-                                  {k.duration}D
+                          <div key={k.id} className="p-3.5 flex items-center justify-between hover:bg-slate-900/60 transition">
+                            <div className="min-w-0 pr-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`text-xs font-mono font-bold tracking-wider ${isUsed ? 'text-slate-400 line-through' : 'text-white'}`}>
+                                  {k.key}
                                 </span>
-                                {isUsed && <span className="text-[8px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-full">USADA</span>}
+                                <span className={`text-[8px] font-extrabold px-2 py-0.5 rounded-full ${
+                                  k.duration === 365 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                                }`}>
+                                  {k.duration} DIAS
+                                </span>
+                                {isUsed ? (
+                                  <span className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                                    USADA ({k.usedBy})
+                                  </span>
+                                ) : (
+                                  <span className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                    DISPONÍVEL
+                                  </span>
+                                )}
                               </div>
-                              <p className="text-[9px] text-slate-500 truncate mt-0.5">{k.createdAt}</p>
+                              <div className="flex flex-wrap items-center gap-2 text-[9px] text-slate-500 mt-1">
+                                <span>{k.createdAt}</span>
+                                {k.usedAt && <span>• Usada em: {new Date(k.usedAt).toLocaleDateString()}</span>}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 shrink-0">
                               <button 
                                 onClick={() => {
                                   navigator.clipboard.writeText(k.key);
@@ -811,7 +908,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                               <button 
                                 onClick={() => handleDeleteGeneratedKey(k.key)}
                                 className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 flex items-center justify-center transition"
-                                title="Excluir"
+                                title="Excluir Chave"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -828,6 +925,56 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
           </div>
         )}
       </motion.div>
+
+      {/* In-app Deletion Confirmation Modal Dialog (100% iframe-safe, zero window.confirm blocking) */}
+      <AnimatePresence>
+        {pendingDelete && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-150">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              transition={{ duration: 0.15 }}
+              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-400 flex items-center justify-center mx-auto shadow-inner">
+                <Trash2 className="w-6 h-6 stroke-[2]" />
+              </div>
+
+              <div className="text-center space-y-1.5">
+                <h4 className="text-sm font-bold text-white">{pendingDelete.title}</h4>
+                <p className="text-xs text-slate-300 leading-relaxed font-normal">
+                  {pendingDelete.description}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setPendingDelete(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 font-bold text-xs transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleConfirmDelete}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-red-950/50 transition flex items-center justify-center gap-1.5"
+                >
+                  {isDeleting ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isDeleting ? 'Excluindo...' : 'Confirmar'}</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )}
   </AnimatePresence>

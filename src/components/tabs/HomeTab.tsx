@@ -54,7 +54,14 @@ const MemoizedRecentTxRow = memo<RecentTxRowProps>(({ tx, categoryColor, onSelec
           {isIncome ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-white truncate">{tx.description}</p>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="text-xs font-semibold text-white truncate">{tx.description}</p>
+            {tx.installmentsTotal && tx.installmentsTotal > 1 ? (
+              <span className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
+                {tx.installmentNumber}/{tx.installmentsTotal}
+              </span>
+            ) : null}
+          </div>
           <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
             <span 
               className="w-1.5 h-1.5 rounded-full inline-block"

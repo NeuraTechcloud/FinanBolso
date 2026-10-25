@@ -3,7 +3,7 @@ import { UserSubscription } from '../types/finance';
 import { StorageService } from './storage';
 import { FirestoreService } from './firestore';
 import { auth, db } from '../lib/firebase';
-import { getDoc, doc as firestoreDoc } from 'firebase/firestore';
+import { getDoc, setDoc, doc as firestoreDoc } from 'firebase/firestore';
 
 export interface ActivationValidationResult {
   valid: boolean;
@@ -83,15 +83,19 @@ export const ActivationService = {
   async deleteAuthorizedKey(keyToDelete: string): Promise<void> {
     const cleanKey = keyToDelete.trim().toUpperCase();
     
-    // 1. Delete from Firestore
-    await FirestoreService.deleteActivationKey(cleanKey);
-
-    // 2. Fallback to LocalStorage
+    // 1. Sync LocalStorage immediately so local queries never return it
     const keys = this.getAuthorizedKeys();
     const filtered = keys.filter(k => k.key.toUpperCase() !== cleanKey);
     try {
       localStorage.setItem(STORAGE_AUTHORIZED_KEYS, JSON.stringify(filtered));
     } catch {}
+
+    // 2. Delete document from Firestore
+    try {
+      await FirestoreService.deleteActivationKey(cleanKey);
+    } catch (err) {
+      console.error('Failed to delete activation key from Firestore:', err);
+    }
   },
 
   // Generate a distinct Activation ID for 30 or 365 days and register it

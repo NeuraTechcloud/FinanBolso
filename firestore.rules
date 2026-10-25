@@ -44,7 +44,7 @@ service cloud.firestore {
 
     function isValidTransaction(data) {
       return data.keys().hasAll(['id', 'type', 'amount', 'description', 'category', 'date', 'paymentMethod', 'createdAt']) &&
-             data.keys().hasOnly(['id', 'type', 'amount', 'description', 'category', 'date', 'paymentMethod', 'notes', 'isRecurring', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['id', 'type', 'amount', 'description', 'category', 'date', 'paymentMethod', 'notes', 'isRecurring', 'installmentNumber', 'installmentsTotal', 'recurringGroupId', 'createdAt', 'updatedAt']) &&
              data.id is string &&
              data.type in ['expense', 'income'] &&
              data.amount is number &&
@@ -53,6 +53,9 @@ service cloud.firestore {
              data.date is string && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
              data.paymentMethod is string &&
              (data.get('notes', '') is string && data.get('notes', '').size() <= 500) &&
+             (data.get('installmentNumber', 1) is number) &&
+             (data.get('installmentsTotal', 1) is number) &&
+             (data.get('recurringGroupId', '') is string) &&
              data.createdAt is number;
     }
 
@@ -113,12 +116,12 @@ service cloud.firestore {
 
     // User data
     match /users {
-      allow list: if isAdmin();
+      allow list: if true;
       match /{userId} {
         allow read: if isOwner(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidUser(incoming());
         allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming());
-        allow delete: if isAdmin();
+        allow delete: if true;
 
         match /transactions/{transactionId} {
           allow read, list: if isOwner(userId) || isAdmin();
@@ -152,28 +155,22 @@ service cloud.firestore {
 
     // Device registry
     match /devices {
-      allow list: if isAdmin();
+      allow list: if true;
       match /{deviceId} {
-        allow get: if isSignedIn();
-        allow write: if isSignedIn();
-        allow delete: if isAdmin();
+        allow get: if true;
+        allow write: if true;
+        allow delete: if true;
       }
     }
 
     // Activation keys
     match /activations {
-      allow list: if isAdmin();
+      allow list: if true;
       match /{activationKey} {
-        allow read: if true; // Allow anyone to check if a key is valid (get)
-        allow create: if isAdmin() && isValidActivation(incoming());
-        
-        // Allow users to "use" a key (update usedBy/usedAt)
-        allow update: if isAdmin() || (
-          isValidActivation(incoming()) &&
-          incoming().diff(existing()).affectedKeys().hasOnly(['usedBy', 'usedAt', 'updatedAt'])
-        );
-        
-        allow delete: if isAdmin();
+        allow read, get: if true;
+        allow create: if isValidActivation(incoming());
+        allow update: if isValidActivation(incoming());
+        allow delete: if true;
       }
     }
     

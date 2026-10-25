@@ -16,7 +16,10 @@ import {
   HelpCircle,
   Plus,
   Percent,
-  Calculator
+  Calculator,
+  Repeat,
+  Layers,
+  Clock
 } from 'lucide-react';
 import { 
   Transaction, 
@@ -29,19 +32,40 @@ import {
 } from '../types/finance';
 import { motion, AnimatePresence } from 'motion/react';
 import { parseFinancialText } from '../services/voiceParser';
-import { formatBRL } from '../services/exportService';
+import { formatBRL, formatDateBR } from '../services/exportService';
 
 interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (transaction: Omit<Transaction, 'id' | 'createdAt'>, existingId?: string) => void;
-  onDelete?: (id: string) => void;
+  onSave: (transaction: Omit<Transaction, 'id' | 'createdAt'> | Array<Omit<Transaction, 'id' | 'createdAt'>>, existingId?: string) => void;
+  onDelete?: (id: string, deleteEntireGroup?: boolean) => void;
   categories: Category[];
   editingTransaction?: Transaction | null;
   initialType?: TransactionType;
   isPro?: boolean;
   onOpenSubscription?: () => void;
 }
+
+// Calculate month-by-month dates accurately handling month-end boundaries
+export const addMonthsToDate = (isoDateStr: string, monthsToAdd: number): string => {
+  const [yearStr, monthStr, dayStr] = isoDateStr.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10) - 1;
+  const day = parseInt(dayStr, 10);
+
+  const targetDate = new Date(year, month + monthsToAdd, 1);
+  const targetYear = targetDate.getFullYear();
+  const targetMonth = targetDate.getMonth();
+
+  const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const finalDay = Math.min(day, daysInTargetMonth);
+
+  const finalYearStr = String(targetYear);
+  const finalMonthStr = String(targetMonth + 1).padStart(2, '0');
+  const finalDayStr = String(finalDay).padStart(2, '0');
+
+  return `${finalYearStr}-${finalMonthStr}-${finalDayStr}`;
+};
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
   isOpen,
@@ -63,6 +87,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [deleteEntireGroup, setDeleteEntireGroup] = useState(false);
+
+  // Recurrence / Monthly duration state
+  const [recurrenceMode, setRecurrenceMode] = useState<'single' | 'duration' | 'installments' | 'indefinite'>('single');
+  const [durationMonths, setDurationMonths] = useState<number>(6);
+  const [installmentCount, setInstallmentCount] = useState<number>(3);
 
   // Voice recording state
   const [isListening, setIsListening] = useState(false);
@@ -129,6 +159,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setDate(editingTransaction.date);
       setPaymentMethod(editingTransaction.paymentMethod);
       setNotes(editingTransaction.notes || '');
+      setRecurrenceMode('single');
     } else {
       setType(initialType);
       setAmountStr('');
@@ -139,10 +170,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setErrorMsg('');
       setVoiceFeedback(null);
       setShowPastePanel(false);
+      setRecurrenceMode('single');
+      setDurationMonths(6);
+      setInstallmentCount(3);
       const defaultCat = categories.find(c => c.type === initialType);
       if (defaultCat) setCategory(defaultCat.name);
     }
     setIsConfirmingDelete(false);
+    setDeleteEntireGroup(false);
   }, [editingTransaction, isOpen, categories, initialType]);
 
   if (!isOpen) return null;
@@ -291,15 +326,91 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       return;
     }
 
-    onSave({
-      type,
-      amount: cleanAmount,
-      description: description.trim(),
-      category,
-      date,
-      paymentMethod,
-      notes: notes.trim() ? notes.trim() : undefined,
-    }, editingTransaction ? editingTransaction.id : undefined);
+    if (editingTransaction) {
+      onSave({
+        type,
+        amount: cleanAmount,
+        description: description.trim(),
+        category,
+        date,
+        paymentMethod,
+        notes: notes.trim() ? notes.trim() : undefined,
+        isRecurring: editingTransaction.isRecurring,
+        installmentNumber: editingTransaction.installmentNumber,
+        installmentsTotal: editingTransaction.installmentsTotal,
+        recurringGroupId: editingTransaction.recurringGroupId,
+      }, editingTransaction.id);
+      onClose();
+      return;
+    }
+
+    // Creating new transaction:
+    if (recurrenceMode === 'duration' && durationMonths > 1) {
+      const groupId = `rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const items: Array<Omit<Transaction, 'id' | 'createdAt'>> = [];
+      for (let i = 1; i <= durationMonths; i++) {
+        items.push({
+          type,
+          amount: cleanAmount,
+          description: `${description.trim()} (${i}/${durationMonths})`,
+          category,
+          date: addMonthsToDate(date, i - 1),
+          paymentMethod,
+          notes: notes.trim() ? `${notes.trim()} • Mensalidade ${i} de ${durationMonths}` : `Mensalidade ${i} de ${durationMonths}`,
+          isRecurring: true,
+          installmentNumber: i,
+          installmentsTotal: durationMonths,
+          recurringGroupId: groupId,
+        });
+      }
+      onSave(items);
+    } else if (recurrenceMode === 'installments' && installmentCount > 1) {
+      const groupId = `parc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const items: Array<Omit<Transaction, 'id' | 'createdAt'>> = [];
+      const installmentVal = Math.round((cleanAmount / installmentCount) * 100) / 100;
+      const totalCalculated = installmentVal * installmentCount;
+      const diff = Math.round((cleanAmount - totalCalculated) * 100) / 100;
+
+      for (let i = 1; i <= installmentCount; i++) {
+        const currentAmount = i === installmentCount ? installmentVal + diff : installmentVal;
+        items.push({
+          type,
+          amount: currentAmount,
+          description: `${description.trim()} (${i}/${installmentCount})`,
+          category,
+          date: addMonthsToDate(date, i - 1),
+          paymentMethod,
+          notes: notes.trim() ? `${notes.trim()} • Parcela ${i} de ${installmentCount}` : `Parcela ${i} de ${installmentCount}`,
+          isRecurring: false,
+          installmentNumber: i,
+          installmentsTotal: installmentCount,
+          recurringGroupId: groupId,
+        });
+      }
+      onSave(items);
+    } else if (recurrenceMode === 'indefinite') {
+      onSave({
+        type,
+        amount: cleanAmount,
+        description: description.trim(),
+        category,
+        date,
+        paymentMethod,
+        notes: notes.trim() ? notes.trim() : undefined,
+        isRecurring: true,
+      });
+    } else {
+      onSave({
+        type,
+        amount: cleanAmount,
+        description: description.trim(),
+        category,
+        date,
+        paymentMethod,
+        notes: notes.trim() ? notes.trim() : undefined,
+        isRecurring: false,
+      });
+    }
 
     onClose();
   };
@@ -803,6 +914,218 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
 
+          {/* Recurrence & Duration Section (Monthly / Installments) */}
+          {!editingTransaction ? (
+            <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Repeat className="w-3.5 h-3.5 text-blue-400" />
+                  Repetição & Duração Mensal
+                </label>
+                {recurrenceMode !== 'single' && (
+                  <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                    Ativado
+                  </span>
+                )}
+              </div>
+
+              {/* Recurrence Mode Selector */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800/80">
+                <button
+                  type="button"
+                  onClick={() => setRecurrenceMode('single')}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold transition ${
+                    recurrenceMode === 'single'
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Único
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecurrenceMode('duration')}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold transition ${
+                    recurrenceMode === 'duration'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Por X Meses
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecurrenceMode('installments')}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold transition ${
+                    recurrenceMode === 'installments'
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Parcelado
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecurrenceMode('indefinite')}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold transition ${
+                    recurrenceMode === 'indefinite'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Fixo Contínuo
+                </button>
+              </div>
+
+              {/* Mode: Duração Mensal (Por X Meses) */}
+              {recurrenceMode === 'duration' && (
+                <div className="space-y-2.5 pt-1 animate-in fade-in">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Quantidade de meses:</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={2}
+                        max={60}
+                        value={durationMonths}
+                        onChange={(e) => setDurationMonths(Math.max(2, parseInt(e.target.value) || 2))}
+                        className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center font-bold text-xs text-white"
+                      />
+                      <span className="text-slate-400 text-xs">meses</span>
+                    </div>
+                  </div>
+
+                  {/* Quick chip buttons */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] text-slate-500 mr-1">Atalhos:</span>
+                    {[2, 3, 6, 12, 18, 24, 36].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setDurationMonths(m)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition ${
+                          durationMonths === m
+                            ? 'bg-blue-600 text-white border-blue-500'
+                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                        }`}
+                      >
+                        {m} meses
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Real-time projection card */}
+                  {(() => {
+                    const val = parseFloat(amountStr.replace(',', '.')) || 0;
+                    const total = val * durationMonths;
+                    const endDate = addMonthsToDate(date, durationMonths - 1);
+                    return (
+                      <div className="p-2.5 rounded-xl bg-blue-950/30 border border-blue-500/30 text-xs text-blue-200 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold flex items-center gap-1.5 text-blue-300">
+                            <Clock className="w-3.5 h-3.5 text-blue-400" />
+                            {durationMonths} lançamentos mensais de {formatBRL(val)}
+                          </span>
+                          <span className="font-extrabold text-white tabular-nums">Total: {formatBRL(total)}</span>
+                        </div>
+                        <p className="text-[10px] text-blue-300/80">
+                          Período: {formatDateBR(date)} até {formatDateBR(endDate)} (1 lançamento a cada mês).
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Mode: Parcelado */}
+              {recurrenceMode === 'installments' && (
+                <div className="space-y-2.5 pt-1 animate-in fade-in">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Número de parcelas:</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={2}
+                        max={48}
+                        value={installmentCount}
+                        onChange={(e) => setInstallmentCount(Math.max(2, parseInt(e.target.value) || 2))}
+                        className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center font-bold text-xs text-white"
+                      />
+                      <span className="text-slate-400 text-xs">vezes</span>
+                    </div>
+                  </div>
+
+                  {/* Quick chips */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] text-slate-500 mr-1">Atalhos:</span>
+                    {[2, 3, 4, 5, 6, 10, 12, 18, 24].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setInstallmentCount(p)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition ${
+                          installmentCount === p
+                            ? 'bg-purple-600 text-white border-purple-500'
+                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                        }`}
+                      >
+                        {p}x
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Projection card */}
+                  {(() => {
+                    const val = parseFloat(amountStr.replace(',', '.')) || 0;
+                    const instVal = installmentCount > 0 ? val / installmentCount : 0;
+                    const endDate = addMonthsToDate(date, installmentCount - 1);
+                    return (
+                      <div className="p-2.5 rounded-xl bg-purple-950/30 border border-purple-500/30 text-xs text-purple-200 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold flex items-center gap-1.5 text-purple-300">
+                            <Layers className="w-3.5 h-3.5 text-purple-400" />
+                            {installmentCount}x de {formatBRL(instVal)}
+                          </span>
+                          <span className="font-extrabold text-white tabular-nums">Total: {formatBRL(val)}</span>
+                        </div>
+                        <p className="text-[10px] text-purple-300/80">
+                          1ª parcela em {formatDateBR(date)} • Última parcela em {formatDateBR(endDate)}.
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Mode: Fixo Indefinido */}
+              {recurrenceMode === 'indefinite' && (
+                <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200 space-y-1 animate-in fade-in">
+                  <span className="font-bold flex items-center gap-1.5 text-emerald-300">
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    Lançamento Fixo Contínuo
+                  </span>
+                  <p className="text-[10px] text-emerald-300/80">
+                    Ideal para despesas mensais sem data de término (ex: Aluguel, Luz, Internet, Assinatura anual).
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            editingTransaction?.installmentsTotal && editingTransaction.installmentsTotal > 1 ? (
+              <div className="p-3 bg-blue-950/30 border border-blue-500/30 rounded-2xl flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-blue-300">
+                  <Clock className="w-4 h-4 text-blue-400" />
+                  <span>
+                    Parcela <strong>{editingTransaction.installmentNumber || 1}</strong> de <strong>{editingTransaction.installmentsTotal}</strong> deste grupo
+                  </span>
+                </div>
+                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full font-mono">
+                  {editingTransaction.recurringGroupId ? 'Vinculado' : 'Parcela'}
+                </span>
+              </div>
+            ) : null
+          )}
+
           {/* Notes (Optional) */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
@@ -821,17 +1144,30 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           {/* Action Buttons */}
           <div className="pt-2">
             {isConfirmingDelete ? (
-              <div className="p-3 bg-red-950/50 border border-red-500/50 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+              <div className="p-3.5 bg-red-950/50 border border-red-500/50 rounded-2xl flex flex-col gap-3 animate-in fade-in">
                 <div className="flex items-center gap-2 text-xs font-semibold text-red-300">
                   <Trash2 className="w-4 h-4 text-red-400 shrink-0" />
                   <span>Excluir este lançamento permanentemente?</span>
                 </div>
+
+                {editingTransaction?.recurringGroupId && (
+                  <label className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={deleteEntireGroup}
+                      onChange={(e) => setDeleteEntireGroup(e.target.checked)}
+                      className="rounded border-slate-700 text-red-500 focus:ring-0"
+                    />
+                    <span>Excluir todas as parcelas deste grupo ({editingTransaction.installmentsTotal || 'recorrentes'})</span>
+                  </label>
+                )}
+
                 <div className="flex items-center gap-2 justify-end shrink-0">
                   <button
                     type="button"
                     onClick={() => {
                       if (editingTransaction && onDelete) {
-                        onDelete(editingTransaction.id);
+                        onDelete(editingTransaction.id, deleteEntireGroup);
                         onClose();
                       }
                     }}

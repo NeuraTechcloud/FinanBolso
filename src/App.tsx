@@ -58,6 +58,17 @@ function AppContent() {
     setTimeout(() => setToastMessage(null), 3000);
   }, []);
 
+  const loadData = useCallback(() => {
+    const loadedTx = StorageService.getTransactions();
+    const loadedCats = StorageService.getCategories();
+    const loadedGoals = StorageService.getSavingsGoals();
+    const loadedRem = StorageService.getReminders();
+    setTransactions(loadedTx);
+    setCategories(loadedCats);
+    setSavingsGoals(loadedGoals);
+    setReminders(loadedRem);
+  }, []);
+
   // Expose subscription and manager modal openers globally
   useEffect(() => {
     (window as any)._openSubscriptionModal = () => setIsSubscriptionModalOpen(true);
@@ -70,23 +81,9 @@ function AppContent() {
     };
   }, []);
 
-  // Load from local offline storage on mount & force device registration + dismiss splash preloader smoothly
+  // 1. Load from local offline storage on mount & dismiss splash preloader smoothly
   useEffect(() => {
     loadData();
-    
-    // Register device presence - handle async logic carefully
-    const initDevice = async () => {
-      try {
-        const updatedSub = await ActivationService.registerDevicePresence(subscription);
-        if (updatedSub) {
-          setSubscription(updatedSub);
-        }
-      } catch (err) {
-        console.error('Device registration failed:', err);
-      }
-    };
-
-    initDevice();
 
     // Smooth fade-out transition for the HTML splash preloader
     const splash = document.getElementById('app-splash');
@@ -99,7 +96,28 @@ function AppContent() {
         return () => clearTimeout(timer);
       });
     }
-  }, [subscription, user]);
+  }, [loadData]);
+
+  // 2. Register device presence and sync Pro plan on launch or when user changes
+  useEffect(() => {
+    let isMounted = true;
+    const initDevice = async () => {
+      try {
+        const currentSub = StorageService.getSubscription();
+        const updatedSub = await ActivationService.registerDevicePresence(currentSub);
+        if (isMounted && updatedSub) {
+          setSubscription(updatedSub);
+        }
+      } catch (err) {
+        console.error('Device registration failed:', err);
+      }
+    };
+
+    initDevice();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid]);
 
   // Firestore Real-time Sync
   useEffect(() => {
@@ -135,22 +153,36 @@ function AppContent() {
     };
   }, [user]);
 
-  const loadData = useCallback(() => {
-    const loadedTx = StorageService.getTransactions();
-    const loadedCats = StorageService.getCategories();
-    const loadedGoals = StorageService.getSavingsGoals();
-    const loadedRem = StorageService.getReminders();
-    setTransactions(loadedTx);
-    setCategories(loadedCats);
-    setSavingsGoals(loadedGoals);
-    setReminders(loadedRem);
-  }, []);
-
   // Save/Update transaction
   const handleSaveTransaction = useCallback((
-    txData: Omit<Transaction, 'id' | 'createdAt'>,
+    txData: Omit<Transaction, 'id' | 'createdAt'> | Array<Omit<Transaction, 'id' | 'createdAt'>>,
     existingId?: string
   ) => {
+    if (Array.isArray(txData)) {
+      const newTxs: Transaction[] = txData.map((item, idx) => ({
+        ...item,
+        id: `tx-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
+        createdAt: Date.now() + idx,
+      }));
+
+      if (user) {
+        newTxs.forEach(t => FirestoreService.saveTransaction(user.uid, t));
+      } else {
+        const updated = [...newTxs, ...transactions];
+        setTransactions(updated);
+        StorageService.saveTransactions(updated);
+      }
+
+      setActiveEffect({
+        type: newTxs[0].type,
+        amount: newTxs[0].amount,
+        description: newTxs[0].description,
+      });
+      showToast(`✓ ${newTxs.length} lançamentos mensais criados com sucesso!`);
+      setEditingTransaction(null);
+      return;
+    }
+
     let newTx: Transaction;
     if (existingId) {
       const existing = transactions.find(t => t.id === existingId);
@@ -218,16 +250,29 @@ function AppContent() {
   }, [transactions, showToast, user]);
 
   // Delete transaction
-  const handleDeleteTransaction = useCallback((id: string) => {
-    if (user) {
-      FirestoreService.deleteTransaction(user.uid, id);
+  const handleDeleteTransaction = useCallback((id: string, deleteEntireGroup: boolean = false) => {
+    const txToDelete = transactions.find(t => t.id === id);
+    if (deleteEntireGroup && txToDelete?.recurringGroupId) {
+      const groupTxs = transactions.filter(t => t.recurringGroupId === txToDelete.recurringGroupId);
+      if (user) {
+        groupTxs.forEach(t => FirestoreService.deleteTransaction(user.uid, t.id));
+      } else {
+        const updated = transactions.filter(t => t.recurringGroupId !== txToDelete.recurringGroupId);
+        setTransactions(updated);
+        StorageService.saveTransactions(updated);
+      }
+      showToast(`✓ Todas as ${groupTxs.length} parcelas do grupo foram excluídas.`);
     } else {
-      const updated = transactions.filter(t => t.id !== id);
-      setTransactions(updated);
-      StorageService.saveTransactions(updated);
+      if (user) {
+        FirestoreService.deleteTransaction(user.uid, id);
+      } else {
+        const updated = transactions.filter(t => t.id !== id);
+        setTransactions(updated);
+        StorageService.saveTransactions(updated);
+      }
+      showToast('Lançamento excluído.');
     }
     setEditingTransaction(null);
-    showToast('Lançamento excluído.');
   }, [transactions, showToast, user]);
 
   // Update Savings Goals
@@ -311,6 +356,19 @@ function AppContent() {
     setIsModalOpen(true);
   }, []);
 
+  // Memoized handlers for modals to avoid redundant re-renders
+  const handleOpenSubscriptionModal = useCallback(() => setIsSubscriptionModalOpen(true), []);
+  const handleCloseSubscriptionModal = useCallback(() => setIsSubscriptionModalOpen(false), []);
+  const handleOpenManagerModal = useCallback(() => setIsManagerModalOpen(true), []);
+  const handleCloseManagerModal = useCallback(() => setIsManagerModalOpen(false), []);
+  const handleOpenEmailAuthModal = useCallback(() => setIsEmailAuthModalOpen(true), []);
+  const handleCloseEmailAuthModal = useCallback(() => setIsEmailAuthModalOpen(false), []);
+  const handleCloseTransactionModal = useCallback(() => {
+    setIsModalOpen(false);
+    setEditingTransaction(null);
+  }, []);
+  const handleTogglePhoneFrame = useCallback(() => setIsPhoneFrame(prev => !prev), []);
+
   return (
     <div className="h-[100dvh] w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-center overflow-hidden antialiased selection:bg-emerald-500 selection:text-white">
       {/* Offline Alert Banner */}
@@ -370,7 +428,7 @@ function AppContent() {
             selectedMonth={selectedMonth}
             onSelectMonth={setSelectedMonth}
             isPhoneFrame={isPhoneFrame}
-            onTogglePhoneFrame={() => setIsPhoneFrame(!isPhoneFrame)}
+            onTogglePhoneFrame={handleTogglePhoneFrame}
             isPro={subscription.isPro}
             expiresAt={subscription.expiresAt}
             activationId={subscription.activationId}
@@ -400,7 +458,7 @@ function AppContent() {
                   categories={categories}
                   selectedMonth={selectedMonth}
                   isPro={subscription.isPro}
-                  onOpenSubscription={() => setIsSubscriptionModalOpen(true)}
+                  onOpenSubscription={handleOpenSubscriptionModal}
                   onOpenAddModal={handleOpenAddModal}
                   onSelectTransaction={handleSelectTransaction}
                   onGoToTab={setCurrentTab}
@@ -424,7 +482,7 @@ function AppContent() {
                   onSelectTransaction={handleSelectTransaction}
                   onOpenAddModal={() => handleOpenAddModal('expense')}
                   isPro={subscription.isPro}
-                  onOpenSubscription={() => setIsSubscriptionModalOpen(true)}
+                  onOpenSubscription={handleOpenSubscriptionModal}
                 />
               )}
 
@@ -465,23 +523,20 @@ function AppContent() {
         {/* Transaction Create / Edit Modal */}
         <TransactionModal
           isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setEditingTransaction(null);
-          }}
+          onClose={handleCloseTransactionModal}
           onSave={handleSaveTransaction}
           onDelete={handleDeleteTransaction}
           categories={categories}
           editingTransaction={editingTransaction}
           initialType={modalType}
           isPro={subscription.isPro}
-          onOpenSubscription={() => setIsSubscriptionModalOpen(true)}
+          onOpenSubscription={handleOpenSubscriptionModal}
         />
 
         {/* Subscription Modal */}
         <SubscriptionModal
           isOpen={isSubscriptionModalOpen}
-          onClose={() => setIsSubscriptionModalOpen(false)}
+          onClose={handleCloseSubscriptionModal}
           subscription={subscription}
           onActivatePro={handleActivatePro}
           onResetSubscription={handleResetSubscription}
@@ -490,7 +545,7 @@ function AppContent() {
         {/* Manager & Admin Panel Modal */}
         <ManagerPanelModal
           isOpen={isManagerModalOpen}
-          onClose={() => setIsManagerModalOpen(false)}
+          onClose={handleCloseManagerModal}
           onForceProGlobal={handleActivatePro}
           onResetSubscriptionGlobal={handleResetSubscription}
           subscription={subscription}
@@ -498,7 +553,7 @@ function AppContent() {
         {/* Email Auth Modal */}
         <EmailAuthModal
           isOpen={isEmailAuthModalOpen}
-          onClose={() => setIsEmailAuthModalOpen(false)}
+          onClose={handleCloseEmailAuthModal}
         />
       </div>
     </div>
