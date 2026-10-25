@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Transaction, Category, PAYMENT_METHOD_LABELS } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
+import { useMonthTransactions } from '../../hooks/useMonthTransactions';
 import { DueBillsAlertBanner } from '../DueBillsAlertBanner';
 
 interface TransactionsTabProps {
@@ -175,11 +176,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }, [selectedMonth]);
 
-  // Regular month transaction list
-  const baseList = useMemo(() => {
-    if (selectedMonth === 'all') return transactions;
-    return transactions.filter(t => t.date.startsWith(selectedMonth));
-  }, [transactions, selectedMonth]);
+  const baseList = useMonthTransactions(transactions, selectedMonth);
 
   // Future installments & scheduled commitments strictly beyond effective month
   const futureList = useMemo(() => {
