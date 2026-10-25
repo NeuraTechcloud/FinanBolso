@@ -48,13 +48,13 @@ export const PaymentIntegrationGuide: React.FC = () => {
     setCreatedPlanResult(result);
   };
 
-  const envSnippet = `MERCADO_PAGO_ACCESS_TOKEN=APP_USR-xxxxxx-xxxxxx-xxxxxx
+  const envSnippet = `MERCADO_PAGO_ACCESS_TOKEN=SEU_ACCESS_TOKEN_DO_MERCADO_PAGO
 PORT=3000
 NODE_ENV=production`;
 
   const curlSnippet = `curl -X POST \\
   'https://api.mercadopago.com/preapproval_plan' \\
-  -H 'Authorization: Bearer YOUR_ACCESS_TOKEN' \\
+  -H 'Authorization: Bearer SEU_ACCESS_TOKEN' \\
   -H 'Content-Type: application/json' \\
   -d '{
   "reason": "Plano FinanBolso Pro Recorrente",
@@ -180,7 +180,7 @@ NODE_ENV=production`;
             </a>
           </div>
           <p className="text-slate-400 leading-relaxed">
-            Acesse o painel Mercado Pago Developers, crie uma aplicação e copie seu <strong>Access Token de Produção ou Teste</strong> (inicia com <code className="text-emerald-300">APP_USR-</code>).
+            Acesse o painel Mercado Pago Developers, crie uma aplicação e copie seu <strong>Access Token de Produção ou Teste</strong> (inicia com <code className="text-emerald-300">APP_USR-</code> ou <code className="text-emerald-300">TEST-</code>).
           </p>
         </div>
 

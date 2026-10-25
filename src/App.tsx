@@ -358,36 +358,81 @@ function AppContent() {
     setCurrentTab('transactions');
   }, []);
 
-  // Update Savings Goals
+  // Update Savings Goals with Optimistic UI and Firestore Sync (including deletions)
   const handleUpdateGoals = useCallback((newGoals: SavingsGoal[]) => {
-    if (user) {
-      // In a real app we might only sync the changed one, but for simplicity:
-      newGoals.forEach(g => FirestoreService.saveGoal(user.uid, g));
-    } else {
-      setSavingsGoals(newGoals);
-      StorageService.saveSavingsGoals(newGoals);
-    }
-  }, [user]);
+    // 1. Optimistic update
+    const previousGoals = savingsGoals;
+    setSavingsGoals(newGoals);
+    StorageService.saveSavingsGoals(newGoals);
 
-  // Update Categories & Budgets
+    // 2. Sync to Firestore if authenticated
+    if (user) {
+      // Find deleted goals
+      const deletedIds = previousGoals
+        .filter(oldG => !newGoals.find(newG => newG.id === oldG.id))
+        .map(g => g.id);
+
+      // Sync additions/updates
+      newGoals.forEach(g => {
+        FirestoreService.saveGoal(user.uid, g).catch(err => console.error('Error saving goal:', err));
+      });
+
+      // Sync deletions
+      deletedIds.forEach(id => {
+        // We need a deleteGoal method in FirestoreService or use a generic one
+        // If it doesn't exist, I'll add it or use a batch
+        FirestoreService.deleteGoal(user.uid, id).catch(err => console.error('Error deleting goal:', err));
+      });
+    }
+  }, [user, savingsGoals]);
+
+  // Update Categories & Budgets with Optimistic UI and Firestore Sync
   const handleUpdateCategories = useCallback((newCategories: Category[]) => {
-    if (user) {
-      newCategories.forEach(c => FirestoreService.saveCategory(user.uid, c));
-    } else {
-      setCategories(newCategories);
-      StorageService.saveCategories(newCategories);
-    }
-  }, [user]);
+    // 1. Optimistic update
+    const previousCategories = categories;
+    setCategories(newCategories);
+    StorageService.saveCategories(newCategories);
 
-  // Update Reminders
-  const handleUpdateReminders = useCallback((newReminders: Reminder[]) => {
+    // 2. Sync to Firestore if authenticated
     if (user) {
-      newReminders.forEach(r => FirestoreService.saveReminder(user.uid, r));
-    } else {
-      setReminders(newReminders);
-      StorageService.saveReminders(newReminders);
+      // Find deleted categories
+      const deletedIds = previousCategories
+        .filter(oldC => !newCategories.find(newC => newC.id === oldC.id))
+        .map(c => c.id);
+
+      newCategories.forEach(c => {
+        FirestoreService.saveCategory(user.uid, c).catch(err => console.error('Error saving category:', err));
+      });
+
+      deletedIds.forEach(id => {
+        FirestoreService.deleteCategory(user.uid, id).catch(err => console.error('Error deleting category:', err));
+      });
     }
-  }, [user]);
+  }, [user, categories]);
+
+  // Update Reminders with Optimistic UI and Firestore Sync
+  const handleUpdateReminders = useCallback((newReminders: Reminder[]) => {
+    // 1. Optimistic update
+    const previousReminders = reminders;
+    setReminders(newReminders);
+    StorageService.saveReminders(newReminders);
+
+    // 2. Sync to Firestore if authenticated
+    if (user) {
+      // Find deleted reminders
+      const deletedIds = previousReminders
+        .filter(oldR => !newReminders.find(newR => newR.id === oldR.id))
+        .map(r => r.id);
+
+      newReminders.forEach(r => {
+        FirestoreService.saveReminder(user.uid, r).catch(err => console.error('Error saving reminder:', err));
+      });
+
+      deletedIds.forEach(id => {
+        FirestoreService.deleteReminder(user.uid, id).catch(err => console.error('Error deleting reminder:', err));
+      });
+    }
+  }, [user, reminders]);
 
   // Activate Pro Subscription
   const handleActivatePro = useCallback(async (planName: string, durationDays: 30 | 365 = 365, activationId?: string) => {

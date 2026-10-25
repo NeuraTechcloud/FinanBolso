@@ -614,13 +614,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 gpu-layer">
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 gpu-layer">
           <motion.div 
             initial={{ y: 24, opacity: 0, scale: 0.98 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 16, opacity: 0, scale: 0.98 }}
             transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92dvh] flex flex-col overflow-hidden gpu-layer"
+            className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[85dvh] sm:max-h-[90dvh] flex flex-col overflow-hidden gpu-layer"
           >
         {/* Modal Header */}
         <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/70 shrink-0">
@@ -1552,6 +1552,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               </div>
             )}
           </div>
+          <div className="h-8 shrink-0" /> {/* Extra bottom padding for mobile scroll */}
         </form>
       </motion.div>
         </div>

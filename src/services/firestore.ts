@@ -201,6 +201,15 @@ export const FirestoreService = {
     }
   },
 
+  async deleteCategory(userId: string, catId: string) {
+    const path = `users/${userId}/categories`;
+    try {
+      await deleteDoc(doc(db, path, catId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `${path}/${catId}`);
+    }
+  },
+
   // --- Savings Goals ---
   subscribeGoals(userId: string, callback: (goals: SavingsGoal[]) => void) {
     const path = `users/${userId}/savingsGoals`;
@@ -223,6 +232,15 @@ export const FirestoreService = {
     }
   },
 
+  async deleteGoal(userId: string, goalId: string) {
+    const path = `users/${userId}/savingsGoals`;
+    try {
+      await deleteDoc(doc(db, path, goalId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `${path}/${goalId}`);
+    }
+  },
+
   // --- Reminders ---
   subscribeReminders(userId: string, callback: (rems: Reminder[]) => void) {
     const path = `users/${userId}/reminders`;
@@ -242,6 +260,15 @@ export const FirestoreService = {
       await setDoc(doc(db, path, reminder.id), this.cleanData(reminder));
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `${path}/${reminder.id}`);
+    }
+  },
+
+  async deleteReminder(userId: string, remId: string) {
+    const path = `users/${userId}/reminders`;
+    try {
+      await deleteDoc(doc(db, path, remId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `${path}/${remId}`);
     }
   },
 

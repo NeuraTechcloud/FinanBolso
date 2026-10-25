@@ -178,10 +178,33 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
       ticketNetBalance: tNet, 
       incomeTotal: totInc,
       expenseTotal: totExp,
-      netBalance: cNet + tNet,
       savingsRate: rate 
     };
   }, [monthTransactions]);
+
+  // Cumulative balances (all history) for main cards
+  const { totalCashBalance, totalTicketBalance } = useMemo(() => {
+    let cBal = 0;
+    let tBal = 0;
+    const nowStr = new Date().toISOString().slice(0, 10);
+
+    for (const t of transactions) {
+      const isTicket = isTicketTx(t);
+      const isPaid = t.isPaid || t.type === 'income'; // Income is considered paid for balance
+      const isHistorical = t.date <= nowStr;
+
+      if (isPaid && isHistorical) {
+        if (t.type === 'income') {
+          if (isTicket) tBal += t.amount;
+          else cBal += t.amount;
+        } else {
+          if (isTicket) tBal -= t.amount;
+          else cBal -= t.amount;
+        }
+      }
+    }
+    return { totalCashBalance: cBal, totalTicketBalance: tBal };
+  }, [transactions]);
 
   // Calculate total monthly budget configured on expense categories
   const { totalBudgetLimit } = useMemo(() => {
@@ -220,6 +243,28 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
       .slice(0, 5);
   }, [monthTransactions]);
 
+  // Calculate Paid vs Pending for Cash
+  const { cashPaidNet, cashPendingExpenses } = useMemo(() => {
+    let paidInc = 0;
+    let paidExp = 0;
+    let pendExp = 0;
+
+    for (let i = 0; i < monthTransactions.length; i++) {
+      const t = monthTransactions[i];
+      if (isTicketTx(t)) continue;
+
+      if (t.type === 'income') {
+        // Income is usually considered "realized" for the month balance unless explicitly marked otherwise
+        // For projections, we treat them as expected income to avoid the confusion of -1530 + 1530 = -1530
+        paidInc += t.amount;
+      } else {
+        if (t.isPaid) paidExp += t.amount;
+        else pendExp += t.amount;
+      }
+    }
+    return { cashPaidNet: paidInc - paidExp, cashPendingExpenses: pendExp };
+  }, [monthTransactions]);
+
   return (
     <div className="space-y-4 pb-24 animate-in fade-in">
       {/* 🏛️ Net Worth / Visão de Patrimônio */}
@@ -235,17 +280,26 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5 text-xs text-slate-400">
                 <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Saldo em Conta (Salário Líquido)</span>
+                <span title="Saldo considerando todas as receitas menos todas as despesas (pagas ou não) e reservas de metas">
+                  Saldo Livre Disponível
+                </span>
               </div>
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700/60">
-                {cashIncome > 0 ? `${savingsRate.toFixed(0)}% Economizado` : 'Sem lançamentos'}
-              </span>
+              {cashPendingExpenses > 0 && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                  {formatBRL(cashPendingExpenses)} Pendente
+                </span>
+              )}
             </div>
 
             <div className="flex items-baseline gap-2 mb-3">
-              <span className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums ${cashNetBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
-                {formatBRL(cashNetBalance)}
+              <span className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums ${netWorthData.freeBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
+                {formatBRL(netWorthData.freeBalance)}
               </span>
+              {cashPendingExpenses > 0 && (
+                <span className="text-[11px] text-slate-500 font-medium italic">
+                  (Proj: {formatBRL(netWorthData.freeBalance - cashPendingExpenses)})
+                </span>
+              )}
             </div>
           </div>
 
@@ -266,8 +320,8 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
                 <ArrowDownRight className="w-4 h-4 stroke-[2.5]" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Contas / Despesas</p>
-                <p className="text-sm font-bold text-red-400 truncate tabular-nums">{formatBRL(cashExpense)}</p>
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Pago (Despesas)</p>
+                <p className="text-sm font-bold text-red-400 truncate tabular-nums">{formatBRL(cashExpense - cashPendingExpenses)}</p>
               </div>
             </div>
           </div>
@@ -289,8 +343,8 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
             </div>
 
             <div className="text-right">
-              <p className={`text-xl font-extrabold tabular-nums ${ticketNetBalance >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
-                {formatBRL(ticketNetBalance)}
+              <p className={`text-xl font-extrabold tabular-nums ${totalTicketBalance >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
+                {formatBRL(totalTicketBalance)}
               </p>
             </div>
           </div>

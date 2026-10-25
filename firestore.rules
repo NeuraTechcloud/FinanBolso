@@ -72,14 +72,15 @@ service cloud.firestore {
 
     function isValidSavingsGoal(data) {
       return data.keys().hasAll(['id', 'title', 'targetAmount', 'currentAmount', 'color', 'icon']) &&
-             data.keys().hasOnly(['id', 'title', 'targetAmount', 'currentAmount', 'deadline', 'color', 'icon']) &&
+             data.keys().hasOnly(['id', 'title', 'targetAmount', 'currentAmount', 'deadline', 'color', 'icon', 'history']) &&
              data.id is string &&
              data.title is string && data.title.size() <= 100 &&
              data.targetAmount is number &&
              data.currentAmount is number &&
              (data.get('deadline', '2000-01-01') is string && data.get('deadline', '2000-01-01').matches('^\\d{4}-\\d{2}-\\d{2}$')) &&
              data.color is string && data.color.matches('^#[0-9a-fA-F]{6}$') &&
-             data.icon is string;
+             data.icon is string &&
+             (data.get('history', []) is list && (data.get('history', []).size() == 0 || data.get('history', [])[0] is map));
     }
 
     function isValidReminder(data) {

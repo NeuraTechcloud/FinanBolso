@@ -7,45 +7,66 @@ export const useNetWorth = (transactions: Transaction[], goals: SavingsGoal[], r
     // We only count transactions that are NOT in goals (if we had goal transactions)
     // For now, let's assume transactions are all liquid cash movements.
     let totalIncome = 0;
-    let totalExpense = 0;
+    let totalPaidExpense = 0;
+    let unpaidHistoricalExpense = 0;
     let futureLiabilities = 0;
 
     const nowStr = new Date().toISOString().slice(0, 10);
 
     transactions.forEach(t => {
-      // Historical balance
-      if (t.date <= nowStr) {
-        if (t.type === 'income') totalIncome += t.amount;
-        else totalExpense += t.amount;
+      if (t.type === 'income') {
+        // We assume income is realized once added, or we could also check isPaid if needed
+        totalIncome += t.amount;
       } else {
-        // Future liabilities (installments or recurring projected)
-        if (t.type === 'expense' && !t.isPaid) {
-          futureLiabilities += t.amount;
+        // Expense
+        if (t.date <= nowStr) {
+          if (t.isPaid) {
+            totalPaidExpense += t.amount;
+          } else {
+            unpaidHistoricalExpense += t.amount;
+          }
+        } else {
+          // Future expenses (always counts as liability if not paid)
+          if (!t.isPaid) {
+            futureLiabilities += t.amount;
+          }
         }
       }
     });
 
-    // 2. Sum of all money in goals
+    // 2. Sum of all money in goals (also an asset)
     const totalGoalsAmount = goals.reduce((acc, g) => acc + g.currentAmount, 0);
 
-    // 3. Unpaid reminders (near term liabilities)
+    // 3. Unpaid reminders (near term liabilities not yet recorded as transactions)
     const unpaidReminders = reminders
       .filter(r => !r.isPaid)
       .reduce((acc, r) => acc + r.amount, 0);
 
-    const liquidCash = totalIncome - totalExpense;
+    // Liquid Cash: What you actually have right now (Total Income - Total Paid Out)
+    const liquidCash = totalIncome - totalPaidExpense;
+    
+    // Free Balance (Requested): Money left after PAYING all current debts
+    const freeBalance = totalIncome - (totalPaidExpense + unpaidHistoricalExpense);
+
+    // Total Assets: Liquid Cash + Goal Savings
     const totalAssets = liquidCash + totalGoalsAmount;
-    const totalLiabilities = futureLiabilities + unpaidReminders;
+    
+    // Total Liabilities: Unpaid history + Future installments + Unpaid reminders
+    const totalLiabilities = unpaidHistoricalExpense + futureLiabilities + unpaidReminders;
+    
+    // Net Worth: Total Assets - Total Liabilities
     const netWorth = totalAssets - totalLiabilities;
 
     return {
       liquidCash,
+      freeBalance,
       totalGoalsAmount,
       totalAssets,
       totalLiabilities,
       netWorth,
       unpaidReminders,
-      futureLiabilities
+      futureLiabilities,
+      unpaidHistoricalExpense
     };
   }, [transactions, goals, reminders]);
 };

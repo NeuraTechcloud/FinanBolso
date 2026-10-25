@@ -18,26 +18,28 @@ export const useMonthTransactions = (transactions: Transaction[], selectedMonth:
     // 2. Project recurring transactions that started before this month and haven't been added yet
     transactions.forEach(t => {
       if (t.isRecurring && t.date < `${selectedMonth}-01`) {
-        // Use group ID if available, otherwise fallback to transaction ID for unique key per month
-        const groupKey = t.recurringGroupId || t.id;
-        const uniqueKey = `${groupKey}-${selectedMonth}`;
+        // Only project if this specific recurring group/transaction hasn't been added yet for this month
+        // We check by:
+        // 1. Same ID (already handled by Map but just in case)
+        // 2. Same recurring group ID
+        // 3. Same description AND amount AND category (to catch "Indefinite" manual duplicates)
+        const alreadyExists = Array.from(resultsMap.values()).some(existing => {
+          const sameGroup = t.recurringGroupId && existing.recurringGroupId === t.recurringGroupId;
+          const sameIdentity = existing.description === t.description && existing.amount === t.amount && existing.category === t.category;
+          return sameGroup || sameIdentity;
+        });
 
-        // Only add if this specific recurring group/transaction hasn't been added yet for this month
-        // AND no other transaction from this group has been added
-        const alreadyAddedInGroup = Array.from(resultsMap.values()).some(existing => 
-          (existing.id === t.id || (t.recurringGroupId && existing.recurringGroupId === t.recurringGroupId)) 
-          && existing.date.startsWith(selectedMonth)
-        );
-
-        if (!alreadyAddedInGroup) {
+        if (!alreadyExists) {
+          const groupKey = t.recurringGroupId || t.id;
+          const uniqueKey = `projected-${groupKey}-${selectedMonth}`;
           const day = t.date.split('-')[2] || '01';
           const dateStr = `${selectedMonth}-${day.padStart(2, '0')}`;
           
           resultsMap.set(uniqueKey, {
             ...t,
-            id: uniqueKey, // Use uniqueKey as ID to avoid collision
+            id: uniqueKey,
             date: dateStr,
-            isPaid: false // Indefinite recurring are unpaid in subsequent months
+            isPaid: false 
           });
         }
       }

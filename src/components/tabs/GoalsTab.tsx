@@ -252,6 +252,19 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
   const [remPaymentMethod, setRemPaymentMethod] = useState<PaymentMethod>('pix');
   const [remNotes, setRemNotes] = useState('');
 
+  // Lock body scroll when any modal is open
+  React.useEffect(() => {
+    const isAnyModalOpen = isGoalModalOpen || isCategoryModalOpen || isReminderModalOpen || !!depositGoal;
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isGoalModalOpen, isCategoryModalOpen, isReminderModalOpen, depositGoal]);
+
   // Month transactions for budget comparisons
   const monthTransactions = selectedMonth === 'all'
     ? transactions
@@ -351,6 +364,20 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
         : g
     );
     onUpdateGoals(updated);
+
+    // Also record a transaction for this deposit if the handler exists
+    if (onAddTransaction) {
+      onAddTransaction({
+        type: 'expense',
+        amount: added,
+        description: `Depósito Meta: ${depositGoal.title}`,
+        category: 'Outros Gastos', // Or maybe a dedicated 'Metas' category
+        date: today,
+        paymentMethod: 'bank_transfer',
+        notes: `Aporte planejado para a meta ${depositGoal.title}`,
+        isPaid: true
+      });
+    }
 
     if (hitTarget) {
       confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
@@ -703,29 +730,28 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
         </div>
       )}
 
-      {/* MODAL: NEW CATEGORY */}
       <AnimatePresence>
         {isCategoryModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-6">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer my-8 sm:my-auto"
+              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[85dvh] sm:max-h-[90dvh] overflow-hidden gpu-layer"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-5 border-b border-slate-800 shrink-0">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <FolderPlus className="w-4 h-4 text-emerald-400" />
                   Criar Nova Categoria
                 </h3>
-                <button onClick={() => setIsCategoryModalOpen(false)} className="p-1 text-slate-400 hover:text-white">
+                <button onClick={() => setIsCategoryModalOpen(false)} className="p-1 text-slate-400 hover:text-white transition">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveNewCategory} className="space-y-3">
+              <form onSubmit={handleSaveNewCategory} className="p-5 overflow-y-auto mobile-scroll space-y-4 flex-1">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Nome da Categoria</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1.5">Nome da Categoria</label>
                   <input
                     type="text"
                     required
@@ -801,6 +827,7 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
                 >
                   Salvar Categoria
                 </button>
+                <div className="h-6 shrink-0" /> {/* Extra bottom padding for scroll */}
               </form>
             </motion.div>
           </div>
@@ -810,26 +837,26 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
       {/* MODAL: NEW REMINDER */}
       <AnimatePresence>
         {isReminderModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-6">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer my-8 sm:my-auto"
+              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[85dvh] sm:max-h-[90dvh] overflow-hidden gpu-layer"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-5 border-b border-slate-800 shrink-0">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Bell className="w-4 h-4 text-emerald-400" />
                   Novo Lembrete de Conta
                 </h3>
-                <button onClick={() => setIsReminderModalOpen(false)} className="p-1 text-slate-400 hover:text-white">
+                <button onClick={() => setIsReminderModalOpen(false)} className="p-1 text-slate-400 hover:text-white transition">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveReminder} className="space-y-3">
+              <form onSubmit={handleSaveReminder} className="p-5 overflow-y-auto mobile-scroll space-y-4 flex-1">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Título / Descrição</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1.5">Título / Descrição</label>
                   <input
                     type="text"
                     required
@@ -883,6 +910,7 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
                 >
                   Salvar Lembrete
                 </button>
+                <div className="h-6 shrink-0" /> {/* Extra bottom padding for scroll */}
               </form>
             </motion.div>
           </div>
@@ -892,25 +920,25 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
       {/* MODAL: EDIT/CREATE SAVINGS GOAL */}
       <AnimatePresence>
         {isGoalModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-6">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 gpu-layer my-8 sm:my-auto"
+              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[85dvh] sm:max-h-[90dvh] overflow-hidden gpu-layer"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-5 border-b border-slate-800 shrink-0">
                 <h3 className="text-sm font-bold text-white">
                   {editingGoal ? 'Editar Meta de Economia' : 'Nova Meta de Economia'}
                 </h3>
-                <button onClick={() => setIsGoalModalOpen(false)} className="p-1 text-slate-400 hover:text-white">
+                <button onClick={() => setIsGoalModalOpen(false)} className="p-1 text-slate-400 hover:text-white transition">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveGoal} className="space-y-3">
+              <form onSubmit={handleSaveGoal} className="p-5 overflow-y-auto mobile-scroll space-y-4 flex-1">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Título da Meta</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1.5">Título da Meta</label>
                   <input
                     type="text"
                     required
@@ -1038,6 +1066,7 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
                     </div>
                   )}
                 </div>
+                <div className="h-6 shrink-0" /> {/* Extra bottom padding for scroll */}
               </form>
             </motion.div>
           </div>
@@ -1047,27 +1076,28 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
       {/* QUICK DEPOSIT MODAL */}
       <AnimatePresence>
         {depositGoal && (
-          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-6">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl gpu-layer my-4 sm:my-auto"
+              className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[85dvh] sm:max-h-[90dvh] overflow-hidden gpu-layer"
             >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-white">Depositar na Meta</h3>
-                <button onClick={() => setDepositGoal(null)} className="p-1 text-slate-400 hover:text-white">
+              <div className="flex items-center justify-between p-5 border-b border-slate-800 shrink-0">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Depositar na Meta</h3>
+                  <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                    Alvo: <strong className="text-emerald-400">{depositGoal.title}</strong>
+                  </p>
+                </div>
+                <button onClick={() => setDepositGoal(null)} className="p-1 text-slate-400 hover:text-white transition">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <p className="text-xs text-slate-300 mb-3">
-                Guardar valor para: <strong className="text-emerald-400">{depositGoal.title}</strong>
-              </p>
-
-              <form onSubmit={handleApplyDeposit} className="space-y-3">
+              <form onSubmit={handleApplyDeposit} className="p-5 overflow-y-auto mobile-scroll space-y-4 flex-1">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Quanto você guardou? (R$)</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1.5">Quanto você guardou? (R$)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1099,6 +1129,7 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
                 >
                   Confirmar Depósito
                 </button>
+                <div className="h-6 shrink-0" /> {/* Extra bottom padding for scroll */}
               </form>
             </motion.div>
           </div>
