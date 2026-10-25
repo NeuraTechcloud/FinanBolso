@@ -17,6 +17,7 @@ import { Transaction, Category, PAYMENT_METHOD_LABELS, DEFAULT_QUICK_PRESETS, Qu
 import { formatBRL, formatDateBR } from '../../services/exportService';
 import { AISmartAdvisor } from '../AISmartAdvisor';
 import { DebtQuittancePlanner } from '../DebtQuittancePlanner';
+import { DueBillsAlertBanner } from '../DueBillsAlertBanner';
 
 interface HomeTabProps {
   transactions: Transaction[];
@@ -214,6 +215,14 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
           </div>
         </div>
       </div>
+
+      {/* Due Bills & Overdue Bills Alert Banner */}
+      <DueBillsAlertBanner
+        transactions={transactions}
+        selectedMonth={selectedMonth}
+        onTogglePaid={onTogglePaid}
+        onSelectTransaction={onSelectTransaction}
+      />
 
       {/* Quick Action Buttons */}
       <div className="grid grid-cols-4 gap-2">

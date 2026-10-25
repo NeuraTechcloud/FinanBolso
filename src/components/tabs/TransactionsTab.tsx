@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Transaction, Category, PAYMENT_METHOD_LABELS } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
+import { DueBillsAlertBanner } from '../DueBillsAlertBanner';
 
 interface TransactionsTabProps {
   transactions: Transaction[];
@@ -359,6 +360,15 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
               </div>
             </div>
           </div>
+
+          {/* Due Bills & Overdue Bills Alert Banner */}
+          <DueBillsAlertBanner
+            transactions={transactions}
+            selectedMonth={selectedMonth}
+            onTogglePaid={onTogglePaid}
+            onSelectTransaction={onSelectTransaction}
+          />
+
           {/* Search & Filter Bar */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
