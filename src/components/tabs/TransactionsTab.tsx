@@ -45,7 +45,7 @@ const MemoizedTransactionRow = memo<TransactionRowProps>(({ tx, categoryColor, o
   return (
     <div
       onClick={() => onSelect(tx)}
-      className={`border rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer transition active:scale-[0.99] shadow-sm gpu-layer ${
+      className={`border rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer transition active:scale-[0.99] shadow-sm gpu-layer fast-render-item ${
         tx.isPaid 
           ? 'bg-slate-900/60 border-slate-800/60 opacity-80' 
           : 'bg-slate-900/90 border-slate-800 hover:border-slate-700/80'
@@ -154,6 +154,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
   const [paidStatusFilter, setPaidStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
   const [showFilters, setShowFilters] = useState(false);
+  const [displayLimit, setDisplayLimit] = useState(35);
 
   // Category colors lookup map
   const categoryColorMap = useMemo(() => {
@@ -257,6 +258,11 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
     }
     return { totalFilteredIncome: inc, totalFilteredExpense: exp };
   }, [filteredList]);
+
+  // Paginated list chunk for low-spec device performance
+  const visibleFilteredList = useMemo(() => {
+    return filteredList.slice(0, displayLimit);
+  }, [filteredList, displayLimit]);
 
   // Distinct category list for dropdown
   const distinctCategories = useMemo(() => Array.from(new Set(baseList.map(t => t.category))), [baseList]);
@@ -542,7 +548,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredList.map((tx) => (
+              {visibleFilteredList.map((tx) => (
                 <MemoizedTransactionRow
                   key={tx.id}
                   tx={tx}
@@ -551,6 +557,16 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
                   onTogglePaid={onTogglePaid}
                 />
               ))}
+
+              {filteredList.length > displayLimit && (
+                <button
+                  type="button"
+                  onClick={() => setDisplayLimit(prev => prev + 35)}
+                  className="w-full py-3 rounded-2xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-emerald-400 font-bold text-xs transition active:scale-95 flex items-center justify-center gap-2 shadow mt-3"
+                >
+                  <span>Exibir Mais Lançamentos ({filteredList.length - displayLimit} restantes)</span>
+                </button>
+              )}
             </div>
           )}
         </div>

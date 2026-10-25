@@ -109,6 +109,19 @@ export const FirestoreService = {
     }
   },
 
+  subscribeUserDoc(userId: string, callback: (userData: any) => void) {
+    const path = `users`;
+    return onSnapshot(
+      doc(db, path, userId),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          callback(snapshot.data());
+        }
+      },
+      (error) => handleFirestoreError(error, OperationType.GET, `${path}/${userId}`)
+    );
+  },
+
   async saveUserSubscription(userId: string, subscription: any) {
     const path = `users`;
     try {

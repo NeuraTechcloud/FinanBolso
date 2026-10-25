@@ -38,6 +38,12 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // Save user profile to Firestore
         await FirestoreService.saveUser(user);
 
+        // If user already has an active Pro subscription locally, ensure it is linked to user account in Firestore
+        const localSub = StorageService.getSubscription();
+        if (localSub && localSub.isPro) {
+          await FirestoreService.saveUserSubscription(user.uid, localSub);
+        }
+
         // Trigger initial migration if needed
         const localTxs = StorageService.getTransactions();
         if (localTxs.length > 0) {

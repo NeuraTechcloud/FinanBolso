@@ -127,6 +127,20 @@ function AppContent() {
     // Use a single cleanup for all listeners to ensure zero memory leaks
     const unsubs: Array<() => void> = [];
 
+    // Subscribe to User document to automatically sync Pro subscription by email
+    unsubs.push(FirestoreService.subscribeUserDoc(user.uid, (userData) => {
+      if (userData && userData.subscription && userData.subscription.isPro) {
+        const cloudSub: UserSubscription = userData.subscription;
+        StorageService.saveSubscription(cloudSub);
+        setSubscription(cloudSub);
+      } else {
+        const currentLocal = StorageService.getSubscription();
+        if (currentLocal && currentLocal.isPro) {
+          FirestoreService.saveUserSubscription(user.uid, currentLocal);
+        }
+      }
+    }));
+
     unsubs.push(FirestoreService.subscribeTransactions(user.uid, (txs) => {
       setTransactions(txs.sort((a, b) => b.createdAt - a.createdAt));
       StorageService.saveTransactions(txs);
