@@ -108,17 +108,25 @@ export const DebtQuittancePlanner: React.FC<DebtQuittancePlannerProps> = ({
     };
   };
 
-  // 1. Calculate Monthly Income for Reference Month
+  // Helper to detect if a transaction is a Ticket / Benefit voucher (VR/VA)
+  const isTicketTx = (t: Transaction) => {
+    return t.paymentMethod === 'ticket' || 
+           t.category.toLowerCase().includes('ticket') || 
+           t.category.toLowerCase().includes('vr') || 
+           t.category.toLowerCase().includes('va');
+  };
+
+  // 1. Calculate Monthly Cash Income (Salary/Bank) for Reference Month
   const { totalIncome, isFallbackIncome } = useMemo(() => {
-    const monthIncomes = transactions.filter(t => t.type === 'income' && t.date.startsWith(effectiveMonth));
+    const monthIncomes = transactions.filter(t => t.type === 'income' && !isTicketTx(t) && t.date.startsWith(effectiveMonth));
     const currentMonthInc = monthIncomes.reduce((acc, t) => acc + t.amount, 0);
 
     if (currentMonthInc > 0) {
       return { totalIncome: currentMonthInc, isFallbackIncome: false };
     }
 
-    // Fallback to average monthly income if user hasn't registered income for this specific month
-    const allIncomes = transactions.filter(t => t.type === 'income');
+    // Fallback to average monthly cash income if user hasn't registered cash income for this specific month
+    const allIncomes = transactions.filter(t => t.type === 'income' && !isTicketTx(t));
     if (allIncomes.length === 0) {
       return { totalIncome: 0, isFallbackIncome: false };
     }

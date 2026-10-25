@@ -11,13 +11,23 @@ import {
   Wallet,
   Sparkles,
   CheckCircle2,
-  Zap
+  Zap,
+  Utensils,
+  CreditCard
 } from 'lucide-react';
 import { Transaction, Category, PAYMENT_METHOD_LABELS, DEFAULT_QUICK_PRESETS, QuickPreset } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
 import { AISmartAdvisor } from '../AISmartAdvisor';
 import { DebtQuittancePlanner } from '../DebtQuittancePlanner';
 import { DueBillsAlertBanner } from '../DueBillsAlertBanner';
+
+// Helper to identify if a transaction is a Ticket / Benefit voucher (VR/VA)
+const isTicketTx = (t: Transaction) => {
+  return t.paymentMethod === 'ticket' || 
+         t.category.toLowerCase().includes('ticket') || 
+         t.category.toLowerCase().includes('vr') || 
+         t.category.toLowerCase().includes('va');
+};
 
 interface HomeTabProps {
   transactions: Transaction[];
@@ -119,18 +129,54 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
       : transactions.filter(t => t.date.startsWith(selectedMonth));
   }, [transactions, selectedMonth]);
 
-  // Current month totals memoized
-  const { incomeTotal, expenseTotal, netBalance, savingsRate } = useMemo(() => {
-    let inc = 0;
-    let exp = 0;
+  // Current month totals memoized - Strictly separated by Liquid Cash (Salary/Bank) vs Ticket (VR/VA)
+  const { 
+    cashIncome, 
+    cashExpense, 
+    cashNetBalance, 
+    ticketIncome, 
+    ticketExpense, 
+    ticketNetBalance, 
+    incomeTotal,
+    expenseTotal,
+    savingsRate 
+  } = useMemo(() => {
+    let cInc = 0;
+    let cExp = 0;
+    let tInc = 0;
+    let tExp = 0;
+
     for (let i = 0; i < monthTransactions.length; i++) {
       const t = monthTransactions[i];
-      if (t.type === 'income') inc += t.amount;
-      else exp += t.amount;
+      const isTicket = isTicketTx(t);
+
+      if (t.type === 'income') {
+        if (isTicket) tInc += t.amount;
+        else cInc += t.amount;
+      } else {
+        if (isTicket) tExp += t.amount;
+        else cExp += t.amount;
+      }
     }
-    const net = inc - exp;
-    const rate = inc > 0 ? Math.max(0, ((inc - exp) / inc) * 100) : 0;
-    return { incomeTotal: inc, expenseTotal: exp, netBalance: net, savingsRate: rate };
+
+    const cNet = cInc - cExp;
+    const tNet = tInc - tExp;
+    const totInc = cInc + tInc;
+    const totExp = cExp + tExp;
+    const rate = cInc > 0 ? Math.max(0, ((cInc - cExp) / cInc) * 100) : 0;
+
+    return { 
+      cashIncome: cInc, 
+      cashExpense: cExp, 
+      cashNetBalance: cNet, 
+      ticketIncome: tInc, 
+      ticketExpense: tExp, 
+      ticketNetBalance: tNet, 
+      incomeTotal: totInc,
+      expenseTotal: totExp,
+      netBalance: cNet + tNet,
+      savingsRate: rate 
+    };
   }, [monthTransactions]);
 
   // Calculate total monthly budget configured on expense categories
@@ -172,35 +218,35 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
 
   return (
     <div className="space-y-4 pb-24 animate-in fade-in">
-      {/* Main Account Balance Card */}
+      {/* Main Account Balance Card (Conta Corrente / Salário Líquido em Dinheiro) */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40 border border-slate-800 p-5 shadow-xl">
         <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5 text-xs text-slate-400">
             <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Saldo Líquido do Período</span>
+            <span>Saldo em Conta (Salário Líquido)</span>
           </div>
           <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700/60">
-            {incomeTotal > 0 ? `${savingsRate.toFixed(0)}% Economizado` : 'Sem lançamentos'}
+            {cashIncome > 0 ? `${savingsRate.toFixed(0)}% Economizado` : 'Sem lançamentos'}
           </span>
         </div>
 
-        <div className="flex items-baseline gap-2 mb-4">
-          <span className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums ${netBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
-            {formatBRL(netBalance)}
+        <div className="flex items-baseline gap-2 mb-3">
+          <span className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums ${cashNetBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
+            {formatBRL(cashNetBalance)}
           </span>
         </div>
 
-        {/* Income & Expense Split Badges */}
+        {/* Income & Expense Split Badges for Cash */}
         <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-800/80">
           <div className="bg-slate-950/50 rounded-2xl p-3 border border-slate-800/60 flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
               <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Receitas</p>
-              <p className="text-sm font-bold text-emerald-400 truncate tabular-nums">{formatBRL(incomeTotal)}</p>
+              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Salário / Receitas</p>
+              <p className="text-sm font-bold text-emerald-400 truncate tabular-nums">{formatBRL(cashIncome)}</p>
             </div>
           </div>
 
@@ -209,11 +255,41 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
               <ArrowDownRight className="w-4 h-4 stroke-[2.5]" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Despesas</p>
-              <p className="text-sm font-bold text-red-400 truncate tabular-nums">{formatBRL(expenseTotal)}</p>
+              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Contas / Despesas</p>
+              <p className="text-sm font-bold text-red-400 truncate tabular-nums">{formatBRL(cashExpense)}</p>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* 💳 Dedicated Ticket / Benefícios (VR / VA) Balance Card */}
+      <div className="p-4 rounded-3xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/30 shadow-lg space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+              <Utensils className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                Saldo em Tickets & Benefícios (VR / VA)
+              </h4>
+              <p className="text-[10px] text-slate-400">Separado da sua conta de dinheiro e salário</p>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <p className={`text-base font-extrabold tabular-nums ${ticketNetBalance >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
+              {formatBRL(ticketNetBalance)}
+            </p>
+          </div>
+        </div>
+
+        {(ticketIncome > 0 || ticketExpense > 0) && (
+          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-800/80">
+            <span>Recebido no Mês: <strong className="text-emerald-400 tabular-nums">+{formatBRL(ticketIncome)}</strong></span>
+            <span>Gasto em Refeição/Mercado: <strong className="text-amber-400 tabular-nums">-{formatBRL(ticketExpense)}</strong></span>
+          </div>
+        )}
       </div>
 
       {/* Due Bills & Overdue Bills Alert Banner */}
