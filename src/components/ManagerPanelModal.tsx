@@ -66,6 +66,17 @@ interface AppUser {
   };
 }
 
+// SHA-256 Hash of fixed ADM Password "100393"
+const ADM_PIN_HASH = 'e302f01fc645949ce070c2e17b4d1d7bab208349a8fda3cc5296e2ec0ef628d8';
+
+async function hashSHA256(str: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 interface ManagerPanelModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -223,9 +234,17 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
     };
   }, [isOpen, isAuthenticated]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinInput === '100393' || user?.email === 'bodygmr30@gmail.com') {
+    const cleanInput = pinInput.trim();
+    if (!cleanInput) {
+      setPinError(true);
+      return;
+    }
+
+    const inputHash = await hashSHA256(cleanInput);
+
+    if (inputHash === ADM_PIN_HASH || cleanInput === '100393') {
       setIsAuthenticated(true);
       setPinError(false);
     } else {
@@ -547,29 +566,61 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
         </div>
 
         {/* PIN Lock */}
-        {!isAuthenticated ? (
+        {!user ? (
+          <div className="p-8 flex flex-col items-center justify-center space-y-4 my-auto text-center max-w-sm mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/30">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-white">Login de Administrador Requerido</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Para acessar o Painel ADM, faça login na sua conta de administrador do sistema.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                onClose();
+                (window as any)._openEmailAuthModal?.();
+              }}
+              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow transition active:scale-95"
+            >
+              Fazer Login ADM
+            </button>
+          </div>
+        ) : user.email?.toLowerCase().trim() !== 'bodygmr30@gmail.com' ? (
+          <div className="p-8 flex flex-col items-center justify-center space-y-4 my-auto text-center max-w-sm mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-red-500/10 text-red-400 flex items-center justify-center border border-red-500/30">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-white">Acesso Restrito ao Administrador</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Sua conta atual não possui privilégios de acesso ao Painel ADM do sistema.
+              </p>
+            </div>
+          </div>
+        ) : !isAuthenticated ? (
           <div className="p-8 flex flex-col items-center justify-center space-y-5 my-auto">
             <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 shadow-lg">
               <Lock className="w-8 h-8" />
             </div>
             <div className="text-center space-y-1 max-w-sm">
-              <h3 className="text-base font-bold text-white">Área Restrita do Gestor</h3>
+              <h3 className="text-base font-bold text-white">Autenticação do Gestor</h3>
               <p className="text-xs text-slate-400">
-                Insira a senha de acesso administrativo para gerenciar os planos em tempo real.
+                Digite a senha do sistema para desbloquear o painel administrativo.
               </p>
             </div>
-
             <form onSubmit={handleLogin} className="w-full max-w-xs space-y-3">
               <input
                 type="password"
-                placeholder="Senha Administrativa"
+                placeholder="Senha do Sistema"
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-center text-white text-sm font-mono tracking-widest focus:outline-none focus:border-emerald-500 transition"
               />
-              {pinError && <p className="text-xs text-red-400 text-center">Senha incorreta.</p>}
+              {pinError && <p className="text-xs text-red-400 font-bold text-center">Senha do sistema incorreta.</p>}
               <button type="submit" className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-2xl shadow-lg transition active:scale-95">
-                Acessar Painel
+                Acessar Painel ADM
               </button>
             </form>
           </div>

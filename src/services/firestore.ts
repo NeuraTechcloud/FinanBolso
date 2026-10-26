@@ -380,6 +380,30 @@ export const FirestoreService = {
     }
   },
 
+  // --- Custom Settings ---
+  async saveCustomSettings(docId: string, settingsData: any) {
+    try {
+      await setDoc(doc(db, 'settings', docId), {
+        ...this.cleanData(settingsData),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `settings/${docId}`);
+    }
+  },
+
+  async getCustomSettings(docId: string) {
+    try {
+      const snap = await getDoc(doc(db, 'settings', docId));
+      if (snap.exists()) {
+        return snap.data();
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `settings/${docId}`);
+    }
+    return null;
+  },
+
   // --- Batch Upload (Migration) ---
   async uploadUserData(userId: string, data: {
     transactions: Transaction[],

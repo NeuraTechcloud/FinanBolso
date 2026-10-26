@@ -1,3 +1,5 @@
+import { FirestoreService } from './firestore';
+
 export interface PaymentPreferenceResponse {
   success: boolean;
   paymentId: string;
@@ -18,7 +20,51 @@ export interface ConfirmPaymentResponse {
   message?: string;
 }
 
+export interface CustomPaymentLinks {
+  monthlyUrl: string;
+  yearlyUrl: string;
+}
+
+const STORAGE_CUSTOM_PAYMENT_LINKS = 'finanbolso_custom_payment_links_v1';
+
+export const DEFAULT_PAYMENT_LINKS: CustomPaymentLinks = {
+  monthlyUrl: 'https://mpago.la/2S5kX6M',
+  yearlyUrl: 'https://mpago.la/1A9zY8P',
+};
+
 export const PaymentService = {
+  // Get custom payment links defined by ADM
+  getCustomPaymentLinks(): CustomPaymentLinks {
+    try {
+      const data = localStorage.getItem(STORAGE_CUSTOM_PAYMENT_LINKS);
+      if (data) {
+        const parsed = JSON.parse(data);
+        return {
+          monthlyUrl: parsed.monthlyUrl || DEFAULT_PAYMENT_LINKS.monthlyUrl,
+          yearlyUrl: parsed.yearlyUrl || DEFAULT_PAYMENT_LINKS.yearlyUrl,
+        };
+      }
+    } catch {}
+    return DEFAULT_PAYMENT_LINKS;
+  },
+
+  // Save custom payment links defined by ADM
+  async saveCustomPaymentLinks(links: CustomPaymentLinks): Promise<void> {
+    const cleanLinks = {
+      monthlyUrl: links.monthlyUrl.trim(),
+      yearlyUrl: links.yearlyUrl.trim(),
+    };
+    try {
+      localStorage.setItem(STORAGE_CUSTOM_PAYMENT_LINKS, JSON.stringify(cleanLinks));
+    } catch {}
+    
+    try {
+      await FirestoreService.saveCustomSettings('payment_links', cleanLinks);
+    } catch (e) {
+      console.error('Failed to sync payment links to Firestore:', e);
+    }
+  },
+
   // Request Pix payment preference
   async createCheckoutPreference(plan: 'monthly' | 'yearly', email?: string, name?: string): Promise<PaymentPreferenceResponse> {
     try {
@@ -27,11 +73,9 @@ export const PaymentService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan, email, customerName: name }),
       });
-
       if (!response.ok) {
         throw new Error('Falha ao se comunicar com o servidor de pagamento');
       }
-
       return await response.json();
     } catch (e: any) {
       console.error('Payment Error:', e);
@@ -128,4 +172,3 @@ export const PaymentService = {
     }
   }
 };
-

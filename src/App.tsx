@@ -120,6 +120,13 @@ function AppContent() {
 
   // 2. Register device presence and sync Pro plan on launch or when user changes
   useEffect(() => {
+    // Reset to local free sub on user change to prevent leakage
+    const freeSub = StorageService.getSubscription();
+    freeSub.isPro = false;
+    freeSub.planName = 'Gratuito';
+    freeSub.expiresAt = 0;
+    setSubscription(freeSub);
+
     let isMounted = true;
     const initDevice = async () => {
       try {
@@ -153,10 +160,13 @@ function AppContent() {
         StorageService.saveSubscription(cloudSub);
         setSubscription(cloudSub);
       } else {
-        const currentLocal = StorageService.getSubscription();
-        if (currentLocal && currentLocal.isPro) {
-          FirestoreService.saveUserSubscription(user.uid, currentLocal);
-        }
+        // Reset to local free sub when user document indicates no pro
+        const freeSub = StorageService.getSubscription();
+        freeSub.isPro = false;
+        freeSub.planName = 'Gratuito';
+        freeSub.expiresAt = 0;
+        StorageService.saveSubscription(freeSub);
+        setSubscription(freeSub);
       }
     }));
 

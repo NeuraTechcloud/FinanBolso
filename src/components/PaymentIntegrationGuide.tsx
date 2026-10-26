@@ -3,12 +3,11 @@ import {
   CreditCard, 
   Copy, 
   Server, 
-  Zap, 
   ExternalLink,
   Code,
   Play,
   Check,
-  AlertCircle
+  Link
 } from 'lucide-react';
 import { PaymentService } from '../services/paymentService';
 
@@ -18,6 +17,11 @@ export const PaymentIntegrationGuide: React.FC = () => {
   const [isCreatingPlan, setIsCreatingPlan] = useState(false);
   const [createdPlanResult, setCreatedPlanResult] = useState<any>(null);
 
+  // Custom Payment Links state
+  const [paymentLinks, setPaymentLinks] = useState(() => PaymentService.getCustomPaymentLinks());
+  const [isSavingLinks, setIsSavingLinks] = useState(false);
+  const [linksSavedMsg, setLinksSavedMsg] = useState(false);
+
   useEffect(() => {
     PaymentService.getMercadoPagoStatus().then(setMpStatus);
   }, []);
@@ -26,6 +30,15 @@ export const PaymentIntegrationGuide: React.FC = () => {
     navigator.clipboard.writeText(text);
     setCopiedKey(label);
     setTimeout(() => setCopiedKey(null), 2500);
+  };
+
+  const handleSaveLinks = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingLinks(true);
+    await PaymentService.saveCustomPaymentLinks(paymentLinks);
+    setIsSavingLinks(false);
+    setLinksSavedMsg(true);
+    setTimeout(() => setLinksSavedMsg(false), 3000);
   };
 
   const handleTestCreatePlan = async () => {
@@ -57,53 +70,99 @@ NODE_ENV=production`;
   -H 'Authorization: Bearer SEU_ACCESS_TOKEN' \\
   -H 'Content-Type: application/json' \\
   -d '{
-  "reason": "Plano FinanBolso Pro Recorrente",
-  "auto_recurring": {
-    "frequency": 1,
-    "frequency_type": "months",
-    "repetitions": 12,
-    "billing_day": 10,
-    "billing_day_proportional": true,
-    "free_trial": {
+    "reason": "Plano FinanBolso Pro Recorrente",
+    "auto_recurring": {
       "frequency": 1,
-      "frequency_type": "months"
-    },
-    "transaction_amount": 9.90,
-    "currency_id": "BRL"
-  },
-  "back_url": "https://finanbolso.app"
-}'`;
+      "frequency_type": "months",
+      "transaction_amount": 9.90,
+      "currency_id": "BRL"
+    }
+  }'`;
 
-  const webhookUrlSnippet = `https://seu-dominio.com/api/webhooks/mercadopago`;
+  const webhookUrlSnippet = `https://seu-dominio.app/api/webhooks/mercadopago`;
 
   return (
-    <div className="space-y-4 text-xs animate-in fade-in">
-      {/* Banner */}
-      <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-950 border border-emerald-500/30 space-y-2">
+    <div className="space-y-5 text-xs">
+      {/* SIMPLIFIED PAYMENT LINKS MANAGEMENT CARD */}
+      <div className="p-5 bg-slate-950 rounded-3xl border border-emerald-500/40 space-y-4 shadow-xl">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-              <Zap className="w-4 h-4" />
+          <div className="flex items-center gap-2.5 font-extrabold text-white text-xs uppercase tracking-wider">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+              <Link className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="font-extrabold text-white text-sm">Integração Mercado Pago & Assinaturas Recorrentes</h3>
-              <p className="text-[11px] text-emerald-400">Suporte a Pix, Cartão de Crédito e Planos /preapproval_plan</p>
-            </div>
+            <span>Links Oficiais de Pagamento das Assinaturas</span>
+          </div>
+          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            Mercado Pago
+          </span>
+        </div>
+
+        <p className="text-slate-400 text-xs leading-relaxed">
+          Defina ou altere abaixo os links de checkout para onde seus clientes serão direcionados ao assinar os planos do aplicativo.
+        </p>
+
+        <form onSubmit={handleSaveLinks} className="space-y-3 pt-1">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+              Link de Pagamento - Plano Mensal (R$ 9,90)
+            </label>
+            <input
+              type="url"
+              value={paymentLinks.monthlyUrl}
+              onChange={(e) => setPaymentLinks({ ...paymentLinks, monthlyUrl: e.target.value })}
+              placeholder="https://mpago.la/..."
+              className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+              required
+            />
           </div>
 
-          {mpStatus && (
-            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 border ${
-              mpStatus.configured
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-            }`}>
-              {mpStatus.configured ? <Check className="w-3 h-3 text-emerald-400" /> : <AlertCircle className="w-3 h-3 text-amber-400" />}
-              <span>{mpStatus.configured ? `Token MP Ativo (${mpStatus.mode})` : 'Modo Demo / Sem Token'}</span>
-            </span>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+              Link de Pagamento - Plano Anual (R$ 79,90)
+            </label>
+            <input
+              type="url"
+              value={paymentLinks.yearlyUrl}
+              onChange={(e) => setPaymentLinks({ ...paymentLinks, yearlyUrl: e.target.value })}
+              placeholder="https://mpago.la/..."
+              className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+              required
+            />
+          </div>
+
+          {linksSavedMsg && (
+            <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs rounded-xl flex items-center gap-2">
+              <Check className="w-4 h-4 shrink-0" />
+              <span>✓ Links de pagamento salvos com sucesso!</span>
+            </div>
           )}
+
+          <button
+            type="submit"
+            disabled={isSavingLinks}
+            className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2"
+          >
+            {isSavingLinks ? 'Salvando...' : 'Salvar Links de Pagamento'}
+          </button>
+        </form>
+      </div>
+
+      {/* Mercado Pago API Status Header */}
+      <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-white uppercase tracking-wider">Status Integração Backend</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+              mpStatus?.configured 
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' 
+                : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+            }`}>
+              {mpStatus?.configured ? `Conectado (${mpStatus.mode})` : 'Modo Demonstração / Fallback'}
+            </span>
+          </div>
         </div>
-        <p className="text-slate-300 leading-relaxed text-[11px]">
-          O FinanBolso possui rotas backend Node/Express em <code className="text-emerald-300 font-mono">/server.ts</code> configuradas para comunicação com as APIs oficiais do Mercado Pago (<code className="text-emerald-300 font-mono">/v1/payments</code> e <code className="text-emerald-300 font-mono">/preapproval_plan</code>).
+        <p className="text-slate-400 leading-relaxed">
+          O aplicativo oferece integração direta com as APIs do Mercado Pago (<code className="text-emerald-300 font-mono">/v1/payments</code> e <code className="text-emerald-300 font-mono">/preapproval_plan</code>).
         </p>
       </div>
 

@@ -468,31 +468,21 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 ))}
               </div>
 
-              {/* Subscribe CTA via Mercado Pago Direct Links */}
+              {/* Subscribe CTA via Mercado Pago Custom Links */}
               <div className="pt-2">
-                {selectedPlan === 'monthly' ? (
-                  <a
-                    href="https://mpago.la/2MrsEPU"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 active:scale-95 transition group"
-                  >
-                    <Crown className="w-4 h-4 fill-slate-950 group-hover:scale-110 transition" />
-                    <span>Assinar Plano Mensal via Mercado Pago (R$ 9,90 • 30 Dias)</span>
-                    <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-                  </a>
-                ) : (
-                  <a
-                    href="https://mpago.la/18RNtwt"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 active:scale-95 transition group"
-                  >
-                    <Crown className="w-4 h-4 fill-slate-950 group-hover:scale-110 transition" />
-                    <span>Assinar Plano Anual via Mercado Pago (R$ 79,90 • 365 Dias)</span>
-                    <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-                  </a>
-                )}
+                <a
+                  href={selectedPlan === 'yearly' ? PaymentService.getCustomPaymentLinks().yearlyUrl : PaymentService.getCustomPaymentLinks().monthlyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 active:scale-95 transition group"
+                >
+                  <Crown className="w-4 h-4 fill-slate-950 group-hover:scale-110 transition" />
+                  <span>
+                    Assinar {selectedPlan === 'yearly' ? 'Plano Anual' : 'Plano Mensal'} via Mercado Pago (
+                    {selectedPlan === 'yearly' ? 'R$ 79,90 • 365 Dias' : 'R$ 9,90 • 30 Dias'})
+                  </span>
+                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                </a>
               </div>
             </>
           )}
