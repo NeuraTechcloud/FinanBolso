@@ -15,14 +15,18 @@ export const useMonthTransactions = (transactions: Transaction[], selectedMonth:
       }
     });
 
-    // 2. Project recurring transactions that started before this month and haven't been added yet
+    // 2. Project ONLY true indefinite recurring transactions (isRecurring === true AND NOT a fixed-duration/installment item)
+    // Fixed duration items (with installmentsTotal, installmentNumber, or (i/N) in description) have already been explicitly created
+    // for their specific N months and MUST NOT be projected into months beyond their total duration!
     transactions.forEach(t => {
-      if (t.isRecurring && t.date < `${selectedMonth}-01`) {
+      const hasInstallmentInfo = Boolean(
+        t.installmentsTotal || 
+        t.installmentNumber || 
+        /\(\d+\/\d+\)/.test(t.description)
+      );
+
+      if (t.isRecurring && !hasInstallmentInfo && t.date < `${selectedMonth}-01`) {
         // Only project if this specific recurring group/transaction hasn't been added yet for this month
-        // We check by:
-        // 1. Same ID (already handled by Map but just in case)
-        // 2. Same recurring group ID
-        // 3. Same description AND amount AND category (to catch "Indefinite" manual duplicates)
         const alreadyExists = Array.from(resultsMap.values()).some(existing => {
           const sameGroup = t.recurringGroupId && existing.recurringGroupId === t.recurringGroupId;
           const sameIdentity = existing.description === t.description && existing.amount === t.amount && existing.category === t.category;
@@ -39,12 +43,12 @@ export const useMonthTransactions = (transactions: Transaction[], selectedMonth:
             ...t,
             id: uniqueKey,
             date: dateStr,
-            isPaid: false 
+            isPaid: false
           });
         }
       }
     });
-    
+
     return Array.from(resultsMap.values());
   }, [transactions, selectedMonth]);
 };

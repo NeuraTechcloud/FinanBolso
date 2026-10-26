@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Mail, Lock, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { X, Mail, Lock, Eye, EyeOff, User as UserIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useFirebase } from '../contexts/FirebaseContext';
 
@@ -11,6 +11,7 @@ interface EmailAuthModalProps {
 export const EmailAuthModal: React.FC<EmailAuthModalProps> = ({ isOpen, onClose }) => {
   const { signInWithEmail, signUpWithEmail } = useFirebase();
   const [isLogin, setIsLogin] = useState(true);
+  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -26,7 +27,12 @@ export const EmailAuthModal: React.FC<EmailAuthModalProps> = ({ isOpen, onClose 
       if (isLogin) {
         await signInWithEmail(email, password);
       } else {
-        await signUpWithEmail(email, password);
+        if (!displayName.trim()) {
+          setError('Por favor, informe seu nome completo.');
+          setLoading(false);
+          return;
+        }
+        await signUpWithEmail(email, password, displayName);
       }
       onClose();
     } catch (err: any) {
@@ -55,12 +61,30 @@ export const EmailAuthModal: React.FC<EmailAuthModalProps> = ({ isOpen, onClose 
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {!isLogin && (
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">Nome Completo</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                  <input 
+                    type="text" 
+                    placeholder="Seu nome completo"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:border-emerald-500 outline-none"
+                    required={!isLogin}
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">E-mail</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
                 <input 
                   type="email" 
+                  placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:border-emerald-500 outline-none"
@@ -75,6 +99,7 @@ export const EmailAuthModal: React.FC<EmailAuthModalProps> = ({ isOpen, onClose 
                 <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
                 <input 
                   type={showPassword ? 'text' : 'password'} 
+                  placeholder="Sua senha de acesso"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:border-emerald-500 outline-none"
@@ -98,7 +123,10 @@ export const EmailAuthModal: React.FC<EmailAuthModalProps> = ({ isOpen, onClose 
           </form>
 
           <button 
-            onClick={() => setIsLogin(!isLogin)}
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError(null);
+            }}
             className="w-full mt-4 text-[11px] text-slate-400 hover:text-emerald-400 text-center"
           >
             {isLogin ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entrar'}

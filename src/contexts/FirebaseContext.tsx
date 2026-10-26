@@ -6,7 +6,8 @@ import {
   onAuthStateChanged, 
   signOut,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  updateProfile
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { FirestoreService } from '../services/firestore';
@@ -17,7 +18,8 @@ interface FirebaseContextType {
   loading: boolean;
   signIn: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<void>;
+  updateUserProfile: (displayName: string) => Promise<void>;
   logout: () => Promise<void>;
   isSyncing: boolean;
 }
@@ -37,7 +39,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (user) {
         // Save user profile to Firestore
         await FirestoreService.saveUser(user);
-
+        
         // If user already has an active Pro subscription locally, ensure it is linked to user account in Firestore
         const localSub = StorageService.getSubscription();
         if (localSub && localSub.isPro) {
@@ -86,11 +88,30 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const signUpWithEmail = async (email: string, password: string) => {
+  const signUpWithEmail = async (email: string, password: string, displayName?: string) => {
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const res = await createUserWithEmailAndPassword(auth, email, password);
+      if (res.user && displayName?.trim()) {
+        const cleanName = displayName.trim();
+        await updateProfile(res.user, { displayName: cleanName });
+        await FirestoreService.saveUser({ ...res.user, displayName: cleanName } as any);
+        setUser({ ...res.user, displayName: cleanName } as any);
+      }
     } catch (error) {
       console.error('Email sign up failed:', error);
+      throw error;
+    }
+  };
+
+  const updateUserProfile = async (displayName: string) => {
+    if (!auth.currentUser) return;
+    try {
+      const cleanName = displayName.trim();
+      await updateProfile(auth.currentUser, { displayName: cleanName });
+      await FirestoreService.saveUser({ ...auth.currentUser, displayName: cleanName } as any);
+      setUser({ ...auth.currentUser, displayName: cleanName } as any);
+    } catch (error) {
+      console.error('Update user profile failed:', error);
       throw error;
     }
   };
@@ -104,7 +125,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   return (
-    <FirebaseContext.Provider value={{ user, loading, signIn, signInWithEmail, signUpWithEmail, logout, isSyncing }}>
+    <FirebaseContext.Provider value={{ user, loading, signIn, signInWithEmail, signUpWithEmail, updateUserProfile, logout, isSyncing }}>
       {children}
     </FirebaseContext.Provider>
   );

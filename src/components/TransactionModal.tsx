@@ -552,7 +552,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           date: addMonthsToDate(date, i - 1),
           paymentMethod,
           notes: notes.trim() ? `${notes.trim()} • Mensalidade ${i} de ${durationMonths}` : `Mensalidade ${i} de ${durationMonths}`,
-          isRecurring: true,
+          isRecurring: false,
           installmentNumber: i,
           installmentsTotal: durationMonths,
           recurringGroupId: groupId,

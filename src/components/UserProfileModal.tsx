@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { User, updatePassword, updateProfile } from 'firebase/auth';
+import React, { useState, useEffect } from 'react';
+import { User, updatePassword } from 'firebase/auth';
 import { X, Crown, KeyRound, LogOut, Check, AlertCircle, Mail, User as UserIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserSubscription } from '../types/finance';
+import { useFirebase } from '../contexts/FirebaseContext';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -21,11 +22,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onLogout,
   onOpenSubscription,
 }) => {
+  const { updateUserProfile } = useFirebase();
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [newPassword, setNewPassword] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.displayName) {
+      setDisplayName(user.displayName);
+    }
+  }, [user?.displayName]);
 
   if (!isOpen) return null;
 
@@ -37,8 +45,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     setErrorMsg(null);
 
     try {
-      if (displayName.trim() && displayName !== user.displayName) {
-        await updateProfile(user, { displayName: displayName.trim() });
+      if (displayName.trim()) {
+        await updateUserProfile(displayName.trim());
       }
 
       if (newPassword.trim()) {
@@ -51,7 +59,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         setNewPassword('');
       }
 
-      setSuccessMsg('✓ Perfil atualizado com sucesso!');
+      setSuccessMsg('✓ Perfil e nome atualizados com sucesso!');
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro ao atualizar perfil. Tente fazer login novamente.');
@@ -91,7 +99,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               )}
             </div>
 
-            <h3 className="text-lg font-extrabold text-white">Meu Perfil</h3>
+            <h3 className="text-lg font-extrabold text-white">
+              {user?.displayName || 'Meu Perfil'}
+            </h3>
             <p className="text-xs text-slate-400 mt-0.5">Gerencie seus dados de acesso e plano</p>
           </div>
 
@@ -145,6 +155,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Seu nome completo"
                   className="w-full px-4 py-3 rounded-2xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-emerald-500 transition"
+                  required
                 />
               </div>
 

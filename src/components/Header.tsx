@@ -182,7 +182,9 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                   {user.displayName?.charAt(0) || user.email?.charAt(0)}
                 </div>
               )}
-              <span className="text-xs font-bold text-slate-200 hidden xs:inline">Perfil</span>
+              <span className="text-xs font-bold text-slate-200 max-w-[90px] truncate hidden xs:inline">
+                {user.displayName ? user.displayName.split(' ')[0] : 'Perfil'}
+              </span>
             </button>
           ) : (
             <button
