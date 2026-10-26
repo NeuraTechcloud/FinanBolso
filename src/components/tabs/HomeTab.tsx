@@ -254,8 +254,6 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
       if (isTicketTx(t)) continue;
 
       if (t.type === 'income') {
-        // Income is usually considered "realized" for the month balance unless explicitly marked otherwise
-        // For projections, we treat them as expected income to avoid the confusion of -1530 + 1530 = -1530
         paidInc += t.amount;
       } else {
         if (t.isPaid) paidExp += t.amount;
@@ -264,6 +262,39 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
     }
     return { cashPaidNet: paidInc - paidExp, cashPendingExpenses: pendExp };
   }, [monthTransactions]);
+
+  // Effective monthly income: current month or smart fallback from recurring salary/average
+  const { effectiveIncome, isProjectedIncome, incomeSourceLabel } = useMemo(() => {
+    if (cashIncome > 0) {
+      return { effectiveIncome: cashIncome, isProjectedIncome: false, incomeSourceLabel: 'Receitas do Mês' };
+    }
+    // Check recurring salary in transactions
+    const recurringCashTx = transactions.find(
+      t => t.type === 'income' && !isTicketTx(t) && (t.isRecurring || t.category.toLowerCase().includes('salário') || t.category.toLowerCase().includes('salario'))
+    );
+    if (recurringCashTx) {
+      return { effectiveIncome: recurringCashTx.amount, isProjectedIncome: true, incomeSourceLabel: 'Salário Recorrente' };
+    }
+    // Check average monthly income
+    const allIncomes = transactions.filter(t => t.type === 'income' && !isTicketTx(t));
+    if (allIncomes.length > 0) {
+      const uniqueMonths = new Set(allIncomes.map(t => t.date.slice(0, 7)));
+      const avg = allIncomes.reduce((s, t) => s + t.amount, 0) / Math.max(1, uniqueMonths.size);
+      return { effectiveIncome: avg, isProjectedIncome: true, incomeSourceLabel: 'Média Mensal' };
+    }
+    return { effectiveIncome: 0, isProjectedIncome: false, incomeSourceLabel: 'Sem renda' };
+  }, [cashIncome, transactions]);
+
+  // Saldo Livre do Mês: o que sobra da renda mensal após quitar todas as contas (pagas + pendentes)
+  const monthlyFreeBalance = useMemo(() => {
+    if (effectiveIncome > 0) {
+      return effectiveIncome - cashExpense;
+    }
+    if (totalCashBalance > 0) {
+      return Math.max(0, totalCashBalance - cashPendingExpenses);
+    }
+    return 0;
+  }, [effectiveIncome, cashExpense, totalCashBalance, cashPendingExpenses]);
 
   return (
     <div className="space-y-4 pb-24 animate-in fade-in">
@@ -280,24 +311,28 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5 text-xs text-slate-400">
                 <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-                <span title="Saldo considerando todas as receitas menos todas as despesas (pagas ou não) e reservas de metas">
-                  Saldo Livre Disponível
+                <span title="Saldo que sobra da sua renda mensal após pagar todas as dívidas e despesas do mês">
+                  Saldo Livre do Mês
                 </span>
               </div>
-              {cashPendingExpenses > 0 && (
+              {cashPendingExpenses > 0 ? (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
                   {formatBRL(cashPendingExpenses)} Pendente
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  Contas em dia ✓
                 </span>
               )}
             </div>
 
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums ${netWorthData.freeBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
-                {formatBRL(netWorthData.freeBalance)}
+            <div className="flex items-baseline gap-2 mb-3 flex-wrap">
+              <span className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums ${monthlyFreeBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
+                {formatBRL(monthlyFreeBalance)}
               </span>
-              {cashPendingExpenses > 0 && (
-                <span className="text-[11px] text-slate-500 font-medium italic">
-                  (Proj: {formatBRL(netWorthData.freeBalance - cashPendingExpenses)})
+              {isProjectedIncome && (
+                <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                  Base: {incomeSourceLabel} ({formatBRL(effectiveIncome)})
                 </span>
               )}
             </div>
@@ -310,8 +345,10 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
                 <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Salário / Receitas</p>
-                <p className="text-sm font-bold text-emerald-400 truncate tabular-nums">{formatBRL(cashIncome)}</p>
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                  {isProjectedIncome ? 'Renda Prevista' : 'Salário / Receitas'}
+                </p>
+                <p className="text-sm font-bold text-emerald-400 truncate tabular-nums">{formatBRL(effectiveIncome)}</p>
               </div>
             </div>
 
@@ -320,8 +357,8 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
                 <ArrowDownRight className="w-4 h-4 stroke-[2.5]" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Pago (Despesas)</p>
-                <p className="text-sm font-bold text-red-400 truncate tabular-nums">{formatBRL(cashExpense - cashPendingExpenses)}</p>
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Despesas</p>
+                <p className="text-sm font-bold text-red-400 truncate tabular-nums">{formatBRL(cashExpense)}</p>
               </div>
             </div>
           </div>

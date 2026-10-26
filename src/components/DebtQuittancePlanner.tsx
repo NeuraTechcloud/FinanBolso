@@ -44,6 +44,7 @@ export const DebtQuittancePlanner: React.FC<DebtQuittancePlannerProps> = ({
   const [simTitle, setSimTitle] = useState('Smartphone Novo');
   const [simAmount, setSimAmount] = useState('2500');
   const [simInstallments, setSimInstallments] = useState(10);
+  const [hidePaidDebts, setHidePaidDebts] = useState(false);
 
   // Determine effective reference month YYYY-MM
   const effectiveMonth = useMemo(() => {
@@ -151,6 +152,9 @@ export const DebtQuittancePlanner: React.FC<DebtQuittancePlannerProps> = ({
   const priority1Debts = referenceMonthDebts.filter(d => d.priority === 1);
   const priority2Debts = referenceMonthDebts.filter(d => d.priority === 2);
 
+  const displayedPriority1 = hidePaidDebts ? priority1Debts.filter(d => !d.isPaid) : priority1Debts;
+  const displayedPriority2 = hidePaidDebts ? priority2Debts.filter(d => !d.isPaid) : priority2Debts;
+
   const totalPriority1Final = priority1Debts.reduce((acc, d) => acc + d.finalAmountWithRate, 0);
   const totalPriority2 = priority2Debts.reduce((acc, d) => acc + d.amount, 0);
 
@@ -199,6 +203,15 @@ export const DebtQuittancePlanner: React.FC<DebtQuittancePlannerProps> = ({
             <span className="text-[10px] font-bold text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-700/60">
               {paidCount}/{referenceMonthDebts.length} pagas
             </span>
+          )}
+          {paidCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setHidePaidDebts(!hidePaidDebts)}
+              className="text-[10px] font-bold text-slate-300 hover:text-white bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-700/60 transition active:scale-95"
+            >
+              {hidePaidDebts ? 'Mostrar pagas' : 'Ocultar pagas'}
+            </button>
           )}
           <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/15 px-2.5 py-1 rounded-full border border-emerald-500/30 flex items-center gap-1">
             <Crown className="w-3.5 h-3.5 text-amber-400" /> Pro Ativo
@@ -276,13 +289,15 @@ export const DebtQuittancePlanner: React.FC<DebtQuittancePlannerProps> = ({
                 <span className="tabular-nums">{formatBRL(totalPriority1Final)}</span>
               </div>
 
-              {priority1Debts.length === 0 ? (
+              {displayedPriority1.length === 0 ? (
                 <p className="text-[11px] text-slate-500 py-3 text-center">
-                  Nenhum débito com juros ou cartão neste mês.
+                  {hidePaidDebts && priority1Debts.length > 0
+                    ? '✓ Todas as contas de Prioridade 1 foram quitadas!'
+                    : 'Nenhum débito com juros ou cartão neste mês.'}
                 </p>
               ) : (
-                <div className="space-y-2 max-h-52 overflow-y-auto no-scrollbar pr-0.5">
-                  {priority1Debts.map((d) => (
+                <div className="space-y-2 max-h-52 overflow-y-auto nested-scroll pr-0.5">
+                  {displayedPriority1.map((d) => (
                     <div 
                       key={d.id} 
                       className={`p-2.5 rounded-xl border transition flex items-center justify-between gap-2 ${
@@ -356,13 +371,15 @@ export const DebtQuittancePlanner: React.FC<DebtQuittancePlannerProps> = ({
                 <span className="tabular-nums">{formatBRL(totalPriority2)}</span>
               </div>
 
-              {priority2Debts.length === 0 ? (
+              {displayedPriority2.length === 0 ? (
                 <p className="text-[11px] text-slate-500 py-3 text-center">
-                  Nenhuma conta essencial identificada para este mês.
+                  {hidePaidDebts && priority2Debts.length > 0
+                    ? '✓ Todas as contas de Prioridade 2 foram quitadas!'
+                    : 'Nenhuma conta essencial identificada para este mês.'}
                 </p>
               ) : (
-                <div className="space-y-2 max-h-52 overflow-y-auto no-scrollbar pr-0.5">
-                  {priority2Debts.map((d) => (
+                <div className="space-y-2 max-h-52 overflow-y-auto nested-scroll pr-0.5">
+                  {displayedPriority2.map((d) => (
                     <div 
                       key={d.id} 
                       className={`p-2.5 rounded-xl border transition flex items-center justify-between gap-2 ${

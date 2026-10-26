@@ -325,19 +325,14 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                     <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
                       <div>
                         <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-                          <Smartphone className="w-3 h-3 text-emerald-400" />
-                          <span>Aparelho Vinculado:</span>
+                          <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                          <span>Status da Licença:</span>
                         </div>
-                        <div className="font-mono text-emerald-300 font-bold text-xs">{activeDeviceId}</div>
+                        <div className="text-emerald-300 font-bold text-xs">Chave de Ativação (Uso Único)</div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleCopyDeviceId}
-                        className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-900 border border-slate-800 transition"
-                        title="Copiar ID do Aparelho"
-                      >
-                        {copiedDeviceId ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
+                      <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Ativa
+                      </span>
                     </div>
                   </div>
 
@@ -347,64 +342,6 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   </div>
                 </div>
               )}
-
-              {/* Explicit Device Identification & Hardware Binding Card */}
-              <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Smartphone className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs font-bold text-slate-200">Identificação deste Aparelho:</span>
-                  </div>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    <Fingerprint className="w-3 h-3 text-emerald-400" /> Configurado & Reconhecido
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between bg-slate-900/90 px-3 py-2.5 rounded-xl border border-slate-800">
-                  <div className="space-y-0.5">
-                    <div className="text-[10px] text-slate-400 font-medium">ID Único do Aparelho (Device ID):</div>
-                    <div className="text-xs font-mono font-bold text-emerald-400 select-all tracking-wider">
-                      {activeDeviceId}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyDeviceId}
-                    className="p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800 hover:bg-slate-700 transition flex items-center gap-1 text-[11px] font-semibold"
-                    title="Copiar ID do Aparelho"
-                  >
-                    {copiedDeviceId ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-emerald-400">Copiado</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Copiar ID</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400">
-                  <div className="bg-slate-900/50 p-2 rounded-lg border border-slate-800/80">
-                    <span className="text-[10px] text-slate-500 block">Dispositivo / Plataforma:</span>
-                    <strong className="text-slate-200 text-xs">{deviceInfo.platform}</strong>
-                  </div>
-                  <div className="bg-slate-900/50 p-2 rounded-lg border border-slate-800/80">
-                    <span className="text-[10px] text-slate-500 block">Resolução de Tela:</span>
-                    <strong className="text-slate-200 text-xs">{deviceInfo.screenResolution}</strong>
-                  </div>
-                </div>
-
-                <div className="text-[10px] text-slate-400 bg-emerald-950/20 p-2 rounded-xl border border-emerald-500/20 flex items-start gap-1.5 leading-relaxed">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Como funciona:</strong> Este identificador exclusivo ({activeDeviceId}) garante que qualquer licença de 30 ou 365 dias ativada fique vinculada a este celular.
-                  </span>
-                </div>
-              </div>
 
               {/* Plan Cards (30 Dias vs 365 Dias) */}
               <div className="grid grid-cols-2 gap-3">

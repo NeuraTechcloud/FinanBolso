@@ -1,61 +1,77 @@
 import { useMemo } from 'react';
 import { Transaction, SavingsGoal, Reminder } from '../types/finance';
 
+const isTicketTx = (t: Transaction) => {
+  return t.paymentMethod === 'ticket' || 
+         t.category.toLowerCase().includes('ticket') || 
+         t.category.toLowerCase().includes('vr') || 
+         t.category.toLowerCase().includes('va');
+};
+
 export const useNetWorth = (transactions: Transaction[], goals: SavingsGoal[], reminders: Reminder[]) => {
   return useMemo(() => {
-    // 1. Calculate Liquid Cash (Historical Income - Historical Expense)
-    // We only count transactions that are NOT in goals (if we had goal transactions)
-    // For now, let's assume transactions are all liquid cash movements.
-    let totalIncome = 0;
-    let totalPaidExpense = 0;
+    // 1. Calculate Liquid Cash (Historical Income - Historical Paid Expense)
+    // Filter out tickets (isolated meal/food benefit) and goal transfers
+    let totalCashIncome = 0;
+    let totalPaidCashExpense = 0;
     let unpaidHistoricalExpense = 0;
     let futureLiabilities = 0;
 
     const nowStr = new Date().toISOString().slice(0, 10);
 
-    transactions.forEach(t => {
+    for (let i = 0; i < transactions.length; i++) {
+      const t = transactions[i];
+      if (isTicketTx(t)) continue;
+
+      const isGoalDeposit = t.description.toLowerCase().includes('depósito meta') || 
+                            t.description.toLowerCase().includes('deposito meta') || 
+                            t.category.toLowerCase().includes('meta');
+
       if (t.type === 'income') {
-        // We assume income is realized once added, or we could also check isPaid if needed
-        totalIncome += t.amount;
+        totalCashIncome += t.amount;
       } else {
-        // Expense
+        // If it's an internal transfer to a goal, it's stored in goals, not spent into thin air
+        if (isGoalDeposit) {
+          continue;
+        }
+
         if (t.date <= nowStr) {
           if (t.isPaid) {
-            totalPaidExpense += t.amount;
+            totalPaidCashExpense += t.amount;
           } else {
             unpaidHistoricalExpense += t.amount;
           }
         } else {
-          // Future expenses (always counts as liability if not paid)
+          // Future expenses only count as liabilities when NOT paid
           if (!t.isPaid) {
             futureLiabilities += t.amount;
           }
         }
       }
-    });
+    }
 
-    // 2. Sum of all money in goals (also an asset)
-    const totalGoalsAmount = goals.reduce((acc, g) => acc + g.currentAmount, 0);
+    // 2. Sum of all money in goals (Asset - Patrimônio Guardado)
+    const totalGoalsAmount = goals.reduce((acc, g) => acc + (g.currentAmount || 0), 0);
 
     // 3. Unpaid reminders (near term liabilities not yet recorded as transactions)
     const unpaidReminders = reminders
       .filter(r => !r.isPaid)
       .reduce((acc, r) => acc + r.amount, 0);
 
-    // Liquid Cash: What you actually have right now (Total Income - Total Paid Out)
-    const liquidCash = totalIncome - totalPaidExpense;
-    
-    // Free Balance (Requested): Money left after PAYING all current debts
-    const freeBalance = totalIncome - (totalPaidExpense + unpaidHistoricalExpense);
+    // Liquid Cash: What you actually have in checking/cash (cannot be arbitrarily negative)
+    const liquidCash = Math.max(0, totalCashIncome - totalPaidCashExpense);
 
-    // Total Assets: Liquid Cash + Goal Savings
+    // Total Assets: Liquid Cash in account + Money saved in Goals
     const totalAssets = liquidCash + totalGoalsAmount;
-    
-    // Total Liabilities: Unpaid history + Future installments + Unpaid reminders
+
+    // Total Liabilities: ONLY remaining unpaid debts (decreases automatically as each debt is paid!)
     const totalLiabilities = unpaidHistoricalExpense + futureLiabilities + unpaidReminders;
-    
-    // Net Worth: Total Assets - Total Liabilities
+
+    // Net Worth: Total Assets - Remaining Liabilities (surplus after debts)
     const netWorth = totalAssets - totalLiabilities;
+
+    // Free balance: Cash income remaining after all historical and pending debts are covered
+    const freeBalance = Math.max(0, totalCashIncome - (totalPaidCashExpense + unpaidHistoricalExpense));
 
     return {
       liquidCash,
@@ -70,3 +86,4 @@ export const useNetWorth = (transactions: Transaction[], goals: SavingsGoal[], r
     };
   }, [transactions, goals, reminders]);
 };
+

@@ -314,6 +314,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     if (parsed.paymentMethod) {
       setPaymentMethod(parsed.paymentMethod);
     }
+    if (parsed.notes) {
+      setNotes(parsed.notes);
+    }
   };
 
   const handleApplyParsedTextRef = useRef(handleApplyParsedText);
@@ -641,8 +644,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </button>
         </div>
 
-        {/* Modal Body with min-h-0 and mobile-scroll */}
-        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto min-h-0 mobile-scroll space-y-4 flex-1">
+        {/* Modal Body with min-h-0 and nested-scroll */}
+        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto min-h-0 nested-scroll space-y-4 flex-1">
           {errorMsg && (
             <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-xs text-red-300">
               {errorMsg}

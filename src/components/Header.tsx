@@ -26,6 +26,7 @@ interface HeaderProps {
   user?: User | null;
   onSignIn?: () => void;
   onLogout?: () => void;
+  onOpenProfile?: () => void;
 }
 
 const MONTH_NAMES = [
@@ -44,6 +45,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
   user,
   onSignIn,
   onLogout,
+  onOpenProfile,
 }) => {
   const remainingDays = isPro && expiresAt ? Math.max(0, Math.ceil((expiresAt - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
   const isWarningNearExpiry = isPro && remainingDays <= 5;
@@ -169,17 +171,18 @@ export const Header: React.FC<HeaderProps> = React.memo(({
           {/* Firebase Auth Button */}
           {user ? (
             <button
-              onClick={onLogout}
-              className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition"
-              title={`Logado como ${user.displayName || user.email}`}
+              onClick={onOpenProfile}
+              className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition active:scale-95"
+              title={`Perfil de ${user.displayName || user.email}`}
             >
               {user.photoURL ? (
-                <img src={user.photoURL} alt="Avatar" className="w-7 h-7 rounded-[10px] object-cover border border-slate-700" />
+                <img src={user.photoURL} alt="Avatar" className="w-6 h-6 rounded-[8px] object-cover border border-slate-700" />
               ) : (
-                <div className="w-7 h-7 rounded-[10px] bg-emerald-500/20 flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
+                <div className="w-6 h-6 rounded-[8px] bg-emerald-500/20 flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
                   {user.displayName?.charAt(0) || user.email?.charAt(0)}
                 </div>
               )}
+              <span className="text-xs font-bold text-slate-200 hidden xs:inline">Perfil</span>
             </button>
           ) : (
             <button

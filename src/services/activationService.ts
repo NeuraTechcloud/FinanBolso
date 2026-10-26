@@ -19,6 +19,12 @@ export interface AuthorizedKey {
   durationDays: 30 | 365;
   issuedAt: number;
   label?: string;
+  isUsed?: boolean;
+  status?: 'available' | 'used';
+  usedBy?: string | null;
+  usedAt?: number | null;
+  singleUseRegistered?: boolean;
+  createdAt?: number;
 }
 
 const STORAGE_AUTHORIZED_KEYS = 'finanbolso_authorized_keys_v1';
@@ -50,16 +56,23 @@ export const ActivationService = {
     }
   },
 
-  // Register a newly generated key into the authorized pool
-  async registerAuthorizedKey(key: string, durationDays: 30 | 365, label?: string): Promise<void> {
+  // Register a newly generated key into the authorized pool with single-use lock
+  async registerAuthorizedKey(key: string, durationDays: 30 | 365, label?: string, autoUseEmail?: string): Promise<void> {
     const cleanKey = key.trim().toUpperCase();
-    const keyData = {
+    const currentUser = auth.currentUser;
+    const identifier = autoUseEmail || currentUser?.email || currentUser?.displayName || 'Sistema / Administrador';
+
+    const keyData: AuthorizedKey = {
       key: cleanKey,
       durationDays,
       issuedAt: Date.now(),
-      label: label || `Emitido pelo ADM (${durationDays}d)`,
-      usedBy: null,
-      usedAt: null
+      label: label || `Licença Oficial (${durationDays}d)`,
+      isUsed: true,
+      status: 'used',
+      usedBy: identifier,
+      usedAt: Date.now(),
+      singleUseRegistered: true,
+      createdAt: Date.now(),
     };
 
     try {
@@ -98,13 +111,13 @@ export const ActivationService = {
     }
   },
 
-  // Generate a distinct Activation ID for 30 or 365 days and register it
-  async generateActivationId(durationDays: 30 | 365, label?: string): Promise<string> {
+  // Generate a distinct Activation ID for 30 or 365 days and register it (marked as used immediately)
+  async generateActivationId(durationDays: 30 | 365, label?: string, autoUseEmail?: string): Promise<string> {
     const prefix = durationDays === 30 ? 'PRO-30D' : 'PRO-365D';
     const part1 = generateRandomSegment(4);
     const part2 = generateRandomSegment(4);
     const key = `${prefix}-${part1}-${part2}`;
-    await this.registerAuthorizedKey(key, durationDays, label || `Emitido pelo ADM (${durationDays}d)`);
+    await this.registerAuthorizedKey(key, durationDays, label || `Ativação Automática (${durationDays}d)`, autoUseEmail);
     return key;
   },
 
@@ -123,6 +136,8 @@ export const ActivationService = {
     }
 
     const deviceId = StorageService.getDeviceId();
+    const currentUser = auth.currentUser;
+    const userIdentifier = currentUser?.email || currentUser?.displayName || `Usuário (${deviceId})`;
 
     // 1. Try Firestore verification first
     try {
@@ -130,24 +145,28 @@ export const ActivationService = {
       if (keyDoc.exists()) {
         const data = keyDoc.data();
 
-        // If already used by a DIFFERENT device, reject
-        if (data.usedBy && data.usedBy !== deviceId) {
+        // STRICT SINGLE-USE LOCK: If already used by ANYONE, reject immediately!
+        if (data.isUsed === true || data.status === 'used' || data.usedAt || data.usedBy) {
+          const usedDateStr = data.usedAt ? ` em ${new Date(data.usedAt).toLocaleDateString('pt-BR')}` : '';
           return {
             valid: false,
             durationDays: 30,
             planName: '',
             activationId: id,
             deviceId,
-            message: `Este código de ativação já foi utilizado no aparelho (${data.usedBy}).`,
+            message: `Esta chave de ativação já foi utilizada${usedDateStr} (uso único) e não pode ser usada novamente.`,
           };
         }
 
-        // Mark key as used in Firestore
+        // Mark key as USED in Firestore (single-use lock registered)
         try {
           await setDoc(firestoreDoc(db, 'activations', id), {
-            usedBy: deviceId,
+            isUsed: true,
+            status: 'used',
+            usedBy: userIdentifier,
             usedAt: Date.now(),
-            updatedAt: Date.now()
+            singleUseRegistered: true,
+            updatedAt: Date.now(),
           }, { merge: true });
         } catch (err) {
           console.error('Error marking key as used in Firestore:', err);
@@ -157,8 +176,10 @@ export const ActivationService = {
         const localKeys = this.getAuthorizedKeys();
         const match = localKeys.find(k => k.key.toUpperCase() === id);
         if (match) {
-          (match as any).usedBy = deviceId;
-          (match as any).usedAt = Date.now();
+          match.isUsed = true;
+          match.status = 'used';
+          match.usedBy = userIdentifier;
+          match.usedAt = Date.now();
           try {
             localStorage.setItem(STORAGE_AUTHORIZED_KEYS, JSON.stringify(localKeys));
           } catch {}
@@ -170,50 +191,46 @@ export const ActivationService = {
           planName: data.durationDays === 365 ? 'Pro Anual (365 Dias)' : 'Pro Mensal (30 Dias)',
           activationId: id,
           deviceId,
-          message: `Código validado com sucesso via Nuvem e vinculado a este aparelho (${deviceId})!`,
+          message: `Chave de ativação de uso único validada com sucesso! Plano de ${data.durationDays === 365 ? '365' : '30'} dias liberado.`,
         };
       }
     } catch (e) {
       console.error('Firestore key validation failed, falling back:', e);
     }
 
-    // 2. Try legacy server verification if online
-    try {
-      const response = await fetch('/api/subscription/validate-id', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activationId: id, deviceId }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.valid) {
-          return {
-            valid: true,
-            durationDays: data.durationDays === 30 ? 30 : 365,
-            planName: data.planName || (data.durationDays === 30 ? 'Pro Mensal (30 Dias)' : 'Pro Anual (365 Dias)'),
-            activationId: data.activationId || id,
-            deviceId,
-            message: data.message || `Código validado com sucesso e vinculado a este aparelho (${deviceId})! Plano de ${data.durationDays} dias liberado.`,
-          };
-        }
-      }
-    } catch {
-      // Offline fallback: check local authorized database
-    }
-
     // 2. Check local authorized keys created by ADM
     const authorizedList = this.getAuthorizedKeys();
     const localMatch = authorizedList.find(k => k.key.toUpperCase() === id);
-
     if (localMatch) {
+      // STRICT SINGLE-USE LOCK: If already used locally, reject immediately!
+      if (localMatch.isUsed === true || localMatch.status === 'used' || localMatch.usedAt || localMatch.usedBy) {
+        const usedDateStr = localMatch.usedAt ? ` em ${new Date(localMatch.usedAt).toLocaleDateString('pt-BR')}` : '';
+        return {
+          valid: false,
+          durationDays: 30,
+          planName: '',
+          activationId: localMatch.key,
+          deviceId,
+          message: `Esta chave de ativação já foi utilizada${usedDateStr} (uso único) e não pode ser usada novamente.`,
+        };
+      }
+
+      // Mark as USED locally
+      localMatch.isUsed = true;
+      localMatch.status = 'used';
+      localMatch.usedBy = userIdentifier;
+      localMatch.usedAt = Date.now();
+      try {
+        localStorage.setItem(STORAGE_AUTHORIZED_KEYS, JSON.stringify(authorizedList));
+      } catch {}
+
       return {
         valid: true,
         durationDays: localMatch.durationDays,
         planName: localMatch.durationDays === 365 ? 'Pro Anual (365 Dias)' : 'Pro Mensal (30 Dias)',
         activationId: localMatch.key,
         deviceId,
-        message: `Código autorizado pelo administrador validado e vinculado ao aparelho (${deviceId})! Plano de ${localMatch.durationDays} dias liberado.`,
+        message: `Chave de ativação de uso único validada com sucesso! Plano de ${localMatch.durationDays} dias liberado.`,
       };
     }
 
@@ -224,6 +241,23 @@ export const ActivationService = {
         const subs = JSON.parse(adminSubsData);
         const subMatch = subs.find((s: any) => s.activationId && s.activationId.toUpperCase() === id);
         if (subMatch) {
+          if (subMatch.isKeyUsed || subMatch.status === 'used' || subMatch.keyUsedAt) {
+            return {
+              valid: false,
+              durationDays: 30,
+              planName: '',
+              activationId: id,
+              deviceId,
+              message: 'Esta chave de ativação já foi utilizada (uso único) e não pode ser usada novamente.',
+            };
+          }
+          subMatch.isKeyUsed = true;
+          subMatch.status = 'used';
+          subMatch.keyUsedAt = Date.now();
+          subMatch.usedBy = userIdentifier;
+          try {
+            localStorage.setItem('finanbolso_admin_subscribers_v1', JSON.stringify(subs));
+          } catch {}
           const durationDays: 30 | 365 = subMatch.plan === 'Pro Mensal' ? 30 : 365;
           return {
             valid: true,
@@ -231,7 +265,7 @@ export const ActivationService = {
             planName: durationDays === 365 ? 'Pro Anual (365 Dias)' : 'Pro Mensal (30 Dias)',
             activationId: subMatch.activationId,
             deviceId,
-            message: `Código de cliente validado pelo gestor e vinculado ao aparelho (${deviceId})! Plano de ${durationDays} dias liberado.`,
+            message: `Chave de ativação de uso único validada com sucesso! Plano de ${durationDays} dias liberado.`,
           };
         }
       }
@@ -244,7 +278,7 @@ export const ActivationService = {
       planName: '',
       activationId: id,
       deviceId,
-      message: 'Código não encontrado ou não autorizado pelo administrador.',
+      message: 'Código de ativação não encontrado ou inválido.',
     };
   },
 
@@ -255,21 +289,32 @@ export const ActivationService = {
     return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
   },
 
-  // Create an active UserSubscription object bound to device
+  // Create an active UserSubscription object bound to device (accumulating days if already Pro)
   async buildSubscription(durationDays: 30 | 365, activationId?: string): Promise<UserSubscription> {
     const days = durationDays === 30 ? 30 : 365;
     const now = Date.now();
-    const id = activationId || await this.generateActivationId(days, 'Ativação Master');
+    const id = activationId || await this.generateActivationId(days, 'Ativação Acumulada');
     const deviceId = StorageService.getDeviceId();
+
+    const currentSub = StorageService.getSubscription();
+    let baseExpiresAt = now;
+
+    if (currentSub && currentSub.isPro && currentSub.expiresAt && currentSub.expiresAt > now) {
+      // Accumulate new days on top of existing remaining expiration
+      baseExpiresAt = currentSub.expiresAt;
+    }
+
+    const expiresAt = baseExpiresAt + days * 24 * 60 * 60 * 1000;
+
     return {
       isPro: true,
       planName: days === 30 ? 'Pro Mensal (30 Dias)' : 'Pro Anual (365 Dias)',
       planType: days === 30 ? 'monthly' : 'yearly',
-      durationDays: days,
+      durationDays: (currentSub?.durationDays || 0) + days,
       activationId: id,
       deviceId,
       activatedAt: now,
-      expiresAt: now + days * 24 * 60 * 60 * 1000,
+      expiresAt,
     };
   },
 

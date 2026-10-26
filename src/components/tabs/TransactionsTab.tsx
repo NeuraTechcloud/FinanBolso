@@ -21,6 +21,7 @@ import { Transaction, Category, PAYMENT_METHOD_LABELS } from '../../types/financ
 import { formatBRL, formatDateBR } from '../../services/exportService';
 import { useMonthTransactions } from '../../hooks/useMonthTransactions';
 import { DueBillsAlertBanner } from '../DueBillsAlertBanner';
+import { organizeTransactionsWithAI } from '../../services/aiOrganizationService';
 
 interface TransactionsTabProps {
   transactions: Transaction[];
@@ -30,8 +31,9 @@ interface TransactionsTabProps {
   onOpenAddModal: () => void;
   isPro?: boolean;
   onOpenSubscription?: () => void;
-  defaultSubTab?: 'history' | 'future';
+  defaultSubTab?: 'history' | 'future' | 'ai_clusters';
   onTogglePaid?: (id: string) => void;
+  onRemoveCompletedFixed?: () => void;
 }
 
 interface TransactionRowProps {
@@ -68,8 +70,12 @@ const MemoizedTransactionRow = memo<TransactionRowProps>(({ tx, categoryColor, o
               {tx.description}
             </p>
             {tx.installmentsTotal && tx.installmentsTotal > 1 ? (
-              <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
-                {tx.installmentNumber}/{tx.installmentsTotal}
+              <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded border shrink-0 ${
+                tx.installmentNumber === tx.installmentsTotal && tx.isPaid
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                  : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+              }`}>
+                {tx.installmentNumber}/{tx.installmentsTotal}{tx.installmentNumber === tx.installmentsTotal && tx.isPaid ? ' ✓ Quitado' : ''}
               </span>
             ) : tx.isRecurring ? (
               <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 shrink-0">
@@ -147,8 +153,9 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
   onOpenSubscription,
   defaultSubTab = 'history',
   onTogglePaid,
+  onRemoveCompletedFixed,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'history' | 'future'>(defaultSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<'history' | 'future' | 'ai_clusters'>(defaultSubTab);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -157,6 +164,31 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
   const [showFilters, setShowFilters] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(35);
+  const [hideCompletedFixed, setHideCompletedFixed] = useState(true);
+
+  // Identify recurring/installment groups whose fixed term (X months) is completed and all are paid
+  const completedGroupIds = useMemo(() => {
+    const groupStatus: Record<string, { total: number; count: number; allPaid: boolean }> = {};
+    for (let i = 0; i < transactions.length; i++) {
+      const t = transactions[i];
+      if (t.recurringGroupId && t.installmentsTotal && t.installmentsTotal > 1) {
+        if (!groupStatus[t.recurringGroupId]) {
+          groupStatus[t.recurringGroupId] = { total: t.installmentsTotal, count: 0, allPaid: true };
+        }
+        groupStatus[t.recurringGroupId].count += 1;
+        if (!t.isPaid) {
+          groupStatus[t.recurringGroupId].allPaid = false;
+        }
+      }
+    }
+    const set = new Set<string>();
+    for (const gid in groupStatus) {
+      if (groupStatus[gid].allPaid && groupStatus[gid].count >= groupStatus[gid].total) {
+        set.add(gid);
+      }
+    }
+    return set;
+  }, [transactions]);
 
   // Category colors lookup map
   const categoryColorMap = useMemo(() => {
@@ -178,12 +210,17 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
 
   const baseList = useMonthTransactions(transactions, selectedMonth);
 
-  // Future installments & scheduled commitments strictly beyond effective month
+  // AI Cluster Organization Analysis
+  const aiResult = useMemo(() => {
+    return organizeTransactionsWithAI(baseList, categories);
+  }, [baseList, categories]);
+
+  // Future installments & scheduled commitments strictly beyond effective month (excluding completed groups)
   const futureList = useMemo(() => {
     return transactions
-      .filter(t => t.type === 'expense' && t.date > `${effectiveMonth}-31`)
+      .filter(t => t.type === 'expense' && t.date > `${effectiveMonth}-31` && (!t.recurringGroupId || !completedGroupIds.has(t.recurringGroupId)))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [transactions, effectiveMonth]);
+  }, [transactions, effectiveMonth, completedGroupIds]);
 
   // Group future transactions by month (YYYY-MM)
   const groupedFutureList = useMemo(() => {
@@ -236,6 +273,11 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
       if (paidStatusFilter === 'paid' && !t.isPaid) return false;
       if (paidStatusFilter === 'pending' && t.isPaid) return false;
 
+      // Hide finished fixed payments (where all duration months are completed and paid)
+      if (hideCompletedFixed && t.recurringGroupId && completedGroupIds.has(t.recurringGroupId)) {
+        return false;
+      }
+
       return true;
     }).sort((a, b) => {
       if (sortBy === 'date-desc') return b.date.localeCompare(a.date);
@@ -244,7 +286,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
       if (sortBy === 'amount-asc') return a.amount - b.amount;
       return 0;
     });
-  }, [baseList, searchTerm, typeFilter, categoryFilter, methodFilter, paidStatusFilter, sortBy]);
+  }, [baseList, searchTerm, typeFilter, categoryFilter, methodFilter, paidStatusFilter, sortBy, hideCompletedFixed, completedGroupIds]);
 
   // Filtered totals
   const { totalFilteredIncome, totalFilteredExpense } = useMemo(() => {
@@ -267,11 +309,11 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
 
   return (
     <div className="space-y-4 pb-28 animate-in fade-in">
-      {/* Sub-tabs header: Extrato vs Parcelas Futuras */}
-      <div className="grid grid-cols-2 gap-1.5 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 shadow-sm text-xs">
+      {/* Sub-tabs header: Extrato vs Parcelas Futuras vs Organização IA */}
+      <div className="grid grid-cols-3 gap-1 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 shadow-sm text-xs">
         <button
           onClick={() => setActiveSubTab('history')}
-          className={`py-2 rounded-xl font-bold transition flex items-center justify-center gap-2 ${
+          className={`py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 ${
             activeSubTab === 'history'
               ? 'bg-emerald-500 text-slate-950 shadow-md'
               : 'text-slate-400 hover:text-white'
@@ -299,7 +341,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <span>Parcelas Futuras</span>
+          <span>Futuras</span>
           {!isPro && <Lock className="w-3 h-3 text-amber-400 shrink-0" />}
           {futureList.length > 0 && isPro && (
             <span className="text-[10px] px-1.5 py-0.2 rounded-full font-extrabold bg-blue-500/20 text-blue-300 border border-blue-500/30">
@@ -307,7 +349,57 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
             </span>
           )}
         </button>
+
+        <button
+          onClick={() => {
+            if (!isPro) {
+              onOpenSubscription?.();
+              return;
+            }
+            setActiveSubTab('ai_clusters');
+          }}
+          className={`py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 ${
+            activeSubTab === 'ai_clusters'
+              ? 'bg-purple-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5 text-purple-300 shrink-0" />
+          <span>Organização IA</span>
+          {!isPro && <Lock className="w-3 h-3 text-amber-400 shrink-0" />}
+        </button>
       </div>
+
+      {/* Completed Fixed Payments Banner */}
+      {completedGroupIds.size > 0 && (
+        <div className="p-3.5 bg-gradient-to-r from-slate-900 to-emerald-950/30 border border-emerald-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-md">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
+            <p className="text-slate-300 text-xs">
+              <strong className="text-white">{completedGroupIds.size}</strong> pagamento(s) fixo(s) totalmente quitados ({hideCompletedFixed ? 'ocultos do extrato' : 'visíveis no extrato'})
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setHideCompletedFixed(!hideCompletedFixed)}
+              className="text-[11px] font-bold text-slate-300 hover:text-white px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 transition active:scale-95"
+            >
+              {hideCompletedFixed ? 'Mostrar Concluídos' : 'Ocultar Concluídos'}
+            </button>
+            {onRemoveCompletedFixed && (
+              <button
+                type="button"
+                onClick={onRemoveCompletedFixed}
+                className="text-[11px] font-bold text-red-400 hover:text-red-300 px-2.5 py-1 rounded-xl bg-red-500/15 border border-red-500/30 transition active:scale-95 flex items-center gap-1"
+                title="Excluir lançamentos deste período que já foram totalmente quitados"
+              >
+                Remover do Cadastro
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* VIEW 1: REGULAR TRANSACTIONS */}
       {activeSubTab === 'history' && (
@@ -655,6 +747,130 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* VIEW 3: AI CLUSTER ORGANIZATION */}
+      {activeSubTab === 'ai_clusters' && (
+        <div className="space-y-4 animate-in fade-in">
+          {/* AI Insights Summary Header */}
+          <div className="p-4 bg-slate-900 border border-purple-500/30 rounded-3xl space-y-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Organização Inteligente por IA
+                  </h4>
+                  <p className="text-[10px] text-slate-400">
+                    Análise e classificação automática de receitas e despesas
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                Sem travas ou limites
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-xs">
+              <p className="text-slate-200 font-medium leading-relaxed">
+                {aiResult.insights.summaryText}
+              </p>
+              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-800 text-[10px]">
+                <div className="bg-slate-900 p-2 rounded-xl border border-slate-800 text-center">
+                  <span className="text-slate-400 block">Essenciais</span>
+                  <strong className="text-blue-400 text-xs">{aiResult.insights.essentialRatioPercent}%</strong>
+                </div>
+                <div className="bg-slate-900 p-2 rounded-xl border border-slate-800 text-center">
+                  <span className="text-slate-400 block">Variáveis</span>
+                  <strong className="text-purple-400 text-xs">{aiResult.insights.variableRatioPercent}%</strong>
+                </div>
+                <div className="bg-slate-900 p-2 rounded-xl border border-slate-800 text-center">
+                  <span className="text-slate-400 block">Dívidas</span>
+                  <strong className="text-amber-400 text-xs">{aiResult.insights.debtRatioPercent}%</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* AI Category Correction Suggestions */}
+          {aiResult.categorySuggestions.length > 0 && (
+            <div className="p-3.5 bg-amber-950/20 border border-amber-500/30 rounded-2xl space-y-2">
+              <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                Sugestões de Ajuste de Categoria pela IA
+              </p>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto nested-scroll pr-1">
+                {aiResult.categorySuggestions.map(s => (
+                  <div key={s.transactionId} className="p-2 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between text-xs gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-semibold truncate">{s.description}</p>
+                      <p className="text-[10px] text-slate-400">{s.reason}</p>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 shrink-0">
+                      → {s.suggestedCategory}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AI Clusters List */}
+          <div className="space-y-3">
+            {aiResult.clusters.map(cluster => (
+              <div key={cluster.id} className={`p-4 rounded-3xl border ${cluster.bgColor} ${cluster.borderColor} space-y-3`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h5 className={`text-xs font-bold ${cluster.color} uppercase tracking-wider`}>
+                      {cluster.title}
+                    </h5>
+                    <p className="text-[10px] text-slate-400">{cluster.description}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-xs font-black tabular-nums ${cluster.color}`}>
+                      {formatBRL(cluster.totalAmount)}
+                    </span>
+                    <span className="block text-[9px] text-slate-400 font-semibold">{cluster.items.length} itens</span>
+                  </div>
+                </div>
+
+                {cluster.items.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 py-2 text-center">Nenhum lançamento nesta categoria neste período.</p>
+                ) : (
+                  <div className="space-y-2 max-h-60 overflow-y-auto nested-scroll pr-1">
+                    {cluster.items.map(t => {
+                      const tags = aiResult.taggedTransactions.get(t.id) || [];
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => onSelectTransaction(t)}
+                          className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-slate-700 transition flex items-center justify-between gap-2 cursor-pointer active:scale-98"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-white truncate">{t.description}</p>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              <span className="text-[9px] text-slate-400">{formatDateBR(t.date)}</span>
+                              {tags.map((tag, idx) => (
+                                <span key={idx} className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <span className={`text-xs font-bold tabular-nums shrink-0 ${t.type === 'income' ? 'text-emerald-400' : 'text-slate-200'}`}>
+                            {t.type === 'income' ? '+' : ''}{formatBRL(t.amount)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

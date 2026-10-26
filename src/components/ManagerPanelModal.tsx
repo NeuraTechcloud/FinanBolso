@@ -23,7 +23,8 @@ import {
   Clock,
   UserCheck,
   Crown,
-  AlertTriangle
+  AlertTriangle,
+  ShieldCheck
 } from 'lucide-react';
 import { PaymentIntegrationGuide } from './PaymentIntegrationGuide';
 import { formatBRL, formatDateBR } from '../services/exportService';
@@ -104,12 +105,13 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
   // Key generator state
-  const [generatedKeys, setGeneratedKeys] = useState<Array<{ id: string; key: string; duration: 30 | 365; createdAt: string; usedBy?: string | null; usedAt?: number | null }>>(() => {
+  const [generatedKeys, setGeneratedKeys] = useState<Array<{ id: string; key: string; duration: 30 | 365; createdAt: string; isUsed?: boolean; usedBy?: string | null; usedAt?: number | null }>>(() => {
     return ActivationService.getAuthorizedKeys().map((lk: any) => ({
       id: `key-local-${lk.key}`,
       key: lk.key,
       duration: lk.durationDays,
       createdAt: lk.label || `Chave ${lk.durationDays}d`,
+      isUsed: lk.isUsed === true || lk.status === 'used' || !!lk.usedBy || !!lk.usedAt,
       usedBy: lk.usedBy || null,
       usedAt: lk.usedAt || null,
     }));
@@ -144,6 +146,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
             key: lk.key,
             duration: lk.durationDays,
             createdAt: lk.label || `Chave ${lk.durationDays}d`,
+            isUsed: lk.isUsed === true || lk.status === 'used' || !!lk.usedBy || !!lk.usedAt,
             usedBy: lk.usedBy || null,
             usedAt: lk.usedAt || null,
           }))
@@ -174,6 +177,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
               key: lk.key,
               duration: lk.durationDays,
               createdAt: lk.label || `Chave ${lk.durationDays}d`,
+              isUsed: lk.isUsed === true || lk.status === 'used' || !!lk.usedBy || !!lk.usedAt,
               usedBy: lk.usedBy || null,
               usedAt: lk.usedAt || null,
             });
@@ -191,6 +195,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
               key: k.key,
               duration: k.durationDays,
               createdAt: k.label || `Chave ${k.durationDays}d`,
+              isUsed: k.isUsed === true || k.status === 'used' || !!k.usedBy || !!k.usedAt,
               usedBy: k.usedBy || null,
               usedAt: k.usedAt || null,
             });
@@ -830,6 +835,17 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
             {/* Keygen Tab */}
             {activeTab === 'keygen' && (
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+                {/* Single-Use Security Notice */}
+                <div className="p-3 bg-emerald-950/20 border border-emerald-500/25 rounded-2xl flex items-start gap-2.5 text-xs">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="text-white font-bold text-xs">Licenças com Bloqueio de Uso Único</p>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      Todas as chaves geradas abaixo possuem trava de <strong>uso único</strong>. Uma vez ativadas, o sistema registra permanentemente no painel e impede qualquer reutilização futura.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <button 
                     onClick={() => handleGenerateKey(30)}
@@ -837,7 +853,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                   >
                     <Plus className="w-6 h-6 text-blue-400 mb-2 group-hover:scale-110 transition" />
                     <span className="text-xs font-bold text-white">Chave 30 Dias</span>
-                    <span className="text-[10px] text-slate-400 mt-0.5">Pro Mensal</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5">Pro Mensal (Uso Único)</span>
                   </button>
                   <button 
                     onClick={() => handleGenerateKey(365)}
@@ -845,13 +861,13 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                   >
                     <Plus className="w-6 h-6 text-emerald-400 mb-2 group-hover:scale-110 transition" />
                     <span className="text-xs font-bold text-white">Chave 365 Dias</span>
-                    <span className="text-[10px] text-slate-400 mt-0.5">Pro Anual</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5">Pro Anual (Uso Único)</span>
                   </button>
                 </div>
 
                 <div className="bg-slate-950/50 rounded-2xl border border-slate-800 overflow-hidden">
                   <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/40 flex items-center justify-between">
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Chaves Ativas no Servidor</h4>
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Chaves Registradas (Uso Único)</h4>
                     <span className="text-[10px] font-bold text-emerald-400">{generatedKeys.length} Licenças</span>
                   </div>
                   <div className="divide-y divide-slate-800/80 max-h-72 overflow-y-auto mobile-scroll">
@@ -861,7 +877,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                       </div>
                     ) : (
                       generatedKeys.map((k) => {
-                        const isUsed = !!k.usedBy;
+                        const isUsed = !!k.isUsed;
                         return (
                           <div key={k.id} className="p-3.5 flex items-center justify-between hover:bg-slate-900/60 transition">
                             <div className="min-w-0 pr-3">
@@ -877,18 +893,18 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                                 {isUsed ? (
                                   <span className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 flex items-center gap-1">
                                     <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                                    USADA ({k.usedBy})
+                                    USO ÚNICO • UTILIZADA ({k.usedBy})
                                   </span>
                                 ) : (
                                   <span className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                    DISPONÍVEL
+                                    USO ÚNICO • DISPONÍVEL
                                   </span>
                                 )}
                               </div>
                               <div className="flex flex-wrap items-center gap-2 text-[9px] text-slate-500 mt-1">
                                 <span>{k.createdAt}</span>
-                                {k.usedAt && <span>• Usada em: {new Date(k.usedAt).toLocaleDateString()}</span>}
+                                {k.usedAt && <span>• Ativada em: {new Date(k.usedAt).toLocaleString('pt-BR')}</span>}
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">

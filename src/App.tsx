@@ -9,6 +9,7 @@ import { TransactionModal } from './components/TransactionModal';
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { ManagerPanelModal } from './components/ManagerPanelModal';
 import { EmailAuthModal } from './components/EmailAuthModal';
+import { UserProfileModal } from './components/UserProfileModal';
 import { HomeTab } from './components/tabs/HomeTab';
 import { ChartsTab } from './components/tabs/ChartsTab';
 import { TransactionsTab } from './components/tabs/TransactionsTab';
@@ -43,6 +44,7 @@ function AppContent() {
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);
   const [isEmailAuthModalOpen, setIsEmailAuthModalOpen] = useState(false);
+  const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -352,6 +354,47 @@ function AppContent() {
     showToast(newPaidStatus ? `✓ "${tx.description}" marcada como paga!` : `"${tx.description}" marcada como pendente.`);
   }, [transactions, user, showToast]);
 
+  // Clean / remove all completed fixed payments where all installments were paid and finished
+  const handleCleanCompletedFixedPayments = useCallback(async () => {
+    const groupStatus: Record<string, { total: number; count: number; allPaid: boolean }> = {};
+    for (const t of transactions) {
+      if (t.recurringGroupId && t.installmentsTotal && t.installmentsTotal > 1) {
+        if (!groupStatus[t.recurringGroupId]) {
+          groupStatus[t.recurringGroupId] = { total: t.installmentsTotal, count: 0, allPaid: true };
+        }
+        groupStatus[t.recurringGroupId].count += 1;
+        if (!t.isPaid) {
+          groupStatus[t.recurringGroupId].allPaid = false;
+        }
+      }
+    }
+
+    const completedGroupIds = Object.keys(groupStatus).filter(
+      gid => groupStatus[gid].allPaid && groupStatus[gid].count >= groupStatus[gid].total
+    );
+
+    if (completedGroupIds.length === 0) {
+      showToast('Nenhum pagamento fixo concluído para remover.');
+      return;
+    }
+
+    const txsToRemove = transactions.filter(t => t.recurringGroupId && completedGroupIds.includes(t.recurringGroupId));
+    const remaining = transactions.filter(t => !t.recurringGroupId || !completedGroupIds.includes(t.recurringGroupId));
+
+    setTransactions(remaining);
+    StorageService.saveTransactions(remaining);
+
+    if (user) {
+      txsToRemove.forEach(t => {
+        FirestoreService.deleteTransaction(user.uid, t.id).catch(err => {
+          console.error('Erro ao deletar transação no Firestore:', err);
+        });
+      });
+    }
+
+    showToast(`✓ ${completedGroupIds.length} pagamento(s) fixo(s) concluído(s) (${txsToRemove.length} parcelas) foram removidos do cadastro!`);
+  }, [transactions, user, showToast]);
+
   // Navigate to transactions tab with requested subtab view
   const handleNavigateToTransactions = useCallback((view?: 'all' | 'future') => {
     setTransactionsSubTab(view === 'future' ? 'future' : 'history');
@@ -491,6 +534,8 @@ function AppContent() {
   const handleCloseManagerModal = useCallback(() => setIsManagerModalOpen(false), []);
   const handleOpenEmailAuthModal = useCallback(() => setIsEmailAuthModalOpen(true), []);
   const handleCloseEmailAuthModal = useCallback(() => setIsEmailAuthModalOpen(false), []);
+  const handleOpenUserProfileModal = useCallback(() => setIsUserProfileModalOpen(true), []);
+  const handleCloseUserProfileModal = useCallback(() => setIsUserProfileModalOpen(false), []);
   const handleCloseTransactionModal = useCallback(() => {
     setIsModalOpen(false);
     setEditingTransaction(null);
@@ -563,6 +608,7 @@ function AppContent() {
             user={user}
             onSignIn={signIn}
             onLogout={logout}
+            onOpenProfile={handleOpenUserProfileModal}
           />
         </div>
 
@@ -617,6 +663,7 @@ function AppContent() {
                   onOpenSubscription={handleOpenSubscriptionModal}
                   defaultSubTab={transactionsSubTab}
                   onTogglePaid={handleTogglePaid}
+                  onRemoveCompletedFixed={handleCleanCompletedFixedPayments}
                 />
               )}
 
@@ -688,6 +735,15 @@ function AppContent() {
         <EmailAuthModal
           isOpen={isEmailAuthModalOpen}
           onClose={handleCloseEmailAuthModal}
+        />
+        {/* User Profile Modal */}
+        <UserProfileModal
+          isOpen={isUserProfileModalOpen}
+          onClose={handleCloseUserProfileModal}
+          user={user}
+          subscription={subscription}
+          onLogout={logout}
+          onOpenSubscription={handleOpenSubscriptionModal}
         />
       </div>
     </div>

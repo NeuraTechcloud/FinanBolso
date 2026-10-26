@@ -100,7 +100,7 @@ service cloud.firestore {
 
     function isValidActivation(data) {
       return data.keys().hasAll(['key', 'durationDays', 'issuedAt']) &&
-             data.keys().hasOnly(['key', 'durationDays', 'issuedAt', 'label', 'usedBy', 'usedAt', 'updatedAt']) &&
+             data.keys().hasOnly(['key', 'durationDays', 'issuedAt', 'label', 'usedBy', 'usedAt', 'updatedAt', 'isUsed', 'status', 'singleUseRegistered', 'createdAt']) &&
              data.key is string &&
              data.durationDays in [30, 365] &&
              data.issuedAt is number;
