@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StorageService } from './services/storage';
-import { Transaction, Category, SavingsGoal, QuickPreset, TransactionType, Reminder, UserSubscription } from './types/finance';
+import { Transaction, Category, SavingsGoal, QuickPreset, TransactionType, Reminder, UserSubscription, DEFAULT_CATEGORIES, INITIAL_REMINDERS } from './types/finance';
 import { ActivationService } from './services/activationService';
 import { Header } from './components/Header';
 import { BottomNav, TabType } from './components/BottomNav';
@@ -145,6 +145,23 @@ function AppContent() {
       isMounted = false;
     };
   }, [user?.uid]);
+
+  // Clear data on logout
+  useEffect(() => {
+    if (!user) {
+      setTransactions([]);
+      setCategories(DEFAULT_CATEGORIES);
+      setSavingsGoals([]);
+      setReminders(INITIAL_REMINDERS);
+      setSubscription({
+        isPro: false,
+        planName: 'Gratuito',
+        durationDays: 0,
+        expiresAt: 0,
+        deviceId: StorageService.getDeviceId()
+      });
+    }
+  }, [user]);
 
   // Firestore Real-time Sync
   useEffect(() => {

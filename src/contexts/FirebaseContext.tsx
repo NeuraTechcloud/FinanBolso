@@ -119,6 +119,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const logout = async () => {
     try {
       await signOut(auth);
+      StorageService.clearAllData();
     } catch (error) {
       console.error('Logout failed:', error);
     }
