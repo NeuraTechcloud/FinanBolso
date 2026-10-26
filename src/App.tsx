@@ -152,7 +152,7 @@ function AppContent() {
       setTransactions([]);
       setCategories(DEFAULT_CATEGORIES);
       setSavingsGoals([]);
-      setReminders(INITIAL_REMINDERS);
+      setReminders([]);
       setSubscription({
         isPro: false,
         planName: 'Gratuito',

@@ -356,9 +356,6 @@ export const StorageService = {
 
       const data = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
       if (!data) {
-        // Start clean with 0 fictional data as requested by user
-        this.saveTransactions([]);
-        localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
         return [];
       }
       return JSON.parse(data);
@@ -380,8 +377,7 @@ export const StorageService = {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
       if (!data) {
-        this.saveCategories(DEFAULT_CATEGORIES);
-        return DEFAULT_CATEGORIES;
+        return [];
       }
       return JSON.parse(data);
     } catch (e) {
@@ -424,8 +420,7 @@ export const StorageService = {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.REMINDERS);
       if (!data) {
-        this.saveReminders(INITIAL_REMINDERS);
-        return INITIAL_REMINDERS;
+        return [];
       }
       return JSON.parse(data);
     } catch (e) {

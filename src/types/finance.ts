@@ -92,35 +92,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'outras_receitas', name: 'Outras Entradas', type: 'income', color: '#14b8a6', icon: 'PlusCircle' },
 ];
 
-export const INITIAL_SAVINGS_GOALS: SavingsGoal[] = [
-  {
-    id: 'meta-1',
-    title: 'Reserva de Emergência (6 meses)',
-    targetAmount: 18000,
-    currentAmount: 12450,
-    deadline: '2026-12-31',
-    color: '#10b981',
-    icon: 'ShieldCheck'
-  },
-  {
-    id: 'meta-2',
-    title: 'Viagem de Férias',
-    targetAmount: 6000,
-    currentAmount: 4300,
-    deadline: '2027-01-15',
-    color: '#8b5cf6',
-    icon: 'Plane'
-  },
-  {
-    id: 'meta-3',
-    title: 'Troca de Smartphone',
-    targetAmount: 4500,
-    currentAmount: 2100,
-    deadline: '2026-11-30',
-    color: '#3b82f6',
-    icon: 'Smartphone'
-  }
-];
+export const INITIAL_SAVINGS_GOALS: SavingsGoal[] = [];
 
 export interface QuickPreset {
   id: string;
@@ -154,37 +126,7 @@ export interface Reminder {
   notes?: string;
 }
 
-export const INITIAL_REMINDERS: Reminder[] = [
-  {
-    id: 'rem-1',
-    title: 'Fatura Cartão Nubank',
-    amount: 1450.00,
-    dueDate: new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10),
-    category: 'Moradia & Contas',
-    isPaid: false,
-    paymentMethod: 'credit_card',
-    notes: 'Vencimento dia 25'
-  },
-  {
-    id: 'rem-2',
-    title: 'Internet Fibra Óptica',
-    amount: 119.90,
-    dueDate: new Date(Date.now() + 86400000 * 5).toISOString().slice(0, 10),
-    category: 'Moradia & Contas',
-    isPaid: false,
-    paymentMethod: 'pix',
-    notes: 'Débito automático'
-  },
-  {
-    id: 'rem-3',
-    title: 'Seguro do Automóvel',
-    amount: 230.00,
-    dueDate: new Date(Date.now() + 86400000 * 10).toISOString().slice(0, 10),
-    category: 'Transporte & Combustível',
-    isPaid: false,
-    paymentMethod: 'credit_card'
-  }
-];
+export const INITIAL_REMINDERS: Reminder[] = [];
 export type SubscriptionPlanType = 'monthly' | 'yearly';
 
 export interface UserSubscription {
