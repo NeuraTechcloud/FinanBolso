@@ -267,6 +267,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
           id: `key-instant-${key}`,
           key,
           duration: durationDays,
+          isUsed: false,
           createdAt: `Emitido pelo ADM (${durationDays}d)`,
           usedBy: null,
           usedAt: null

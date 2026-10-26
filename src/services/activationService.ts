@@ -67,10 +67,10 @@ export const ActivationService = {
       durationDays,
       issuedAt: Date.now(),
       label: label || `Licença Oficial (${durationDays}d)`,
-      isUsed: true,
-      status: 'used',
-      usedBy: identifier,
-      usedAt: Date.now(),
+      isUsed: false,
+      status: 'available',
+      usedBy: undefined,
+      usedAt: undefined,
       singleUseRegistered: true,
       createdAt: Date.now(),
     };
@@ -111,7 +111,7 @@ export const ActivationService = {
     }
   },
 
-  // Generate a distinct Activation ID for 30 or 365 days and register it (marked as used immediately)
+  // Generate a distinct Activation ID for 30 or 365 days and register it as available for single-use
   async generateActivationId(durationDays: 30 | 365, label?: string, autoUseEmail?: string): Promise<string> {
     const prefix = durationDays === 30 ? 'PRO-30D' : 'PRO-365D';
     const part1 = generateRandomSegment(4);
