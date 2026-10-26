@@ -25,10 +25,10 @@ import { FirestoreService } from './services/firestore';
 
 function AppContent() {
   const { user, signIn, logout, isSyncing } = useFirebase();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>(() => StorageService.getTransactions());
+  const [categories, setCategories] = useState<Category[]>(() => StorageService.getCategories());
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(() => StorageService.getSavingsGoals());
+  const [reminders, setReminders] = useState<Reminder[]>(() => StorageService.getReminders());
   
   // 3. Setup Notifications
   useEffect(() => {
@@ -146,7 +146,7 @@ function AppContent() {
     };
   }, [user?.uid]);
 
-  // Clear data on logout
+  // Clear or reload data on auth change
   useEffect(() => {
     if (!user) {
       setTransactions([]);
@@ -160,8 +160,14 @@ function AppContent() {
         expiresAt: 0,
         deviceId: StorageService.getDeviceId()
       });
+    } else {
+      setTransactions(StorageService.getTransactions());
+      setCategories(StorageService.getCategories());
+      setSavingsGoals(StorageService.getSavingsGoals());
+      setReminders(StorageService.getReminders());
     }
   }, [user]);
+
 
   // Firestore Real-time Sync
   useEffect(() => {
