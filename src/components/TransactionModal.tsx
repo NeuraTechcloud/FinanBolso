@@ -298,8 +298,62 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     }
   };
 
-  // Parse Voice or Pasted Text
-  const handleApplyParsedText = (text: string) => {
+  // Parse Voice or Pasted Text (AI Enhanced)
+  const handleApplyParsedText = async (text: string) => {
+    if (!text.trim()) return;
+    
+    setVoiceFeedback('🤖 Inteligência Artificial processando...');
+
+    try {
+      // 1. Try server-side AI parsing first (much more accurate)
+      const res = await fetch('/api/ai/smart-parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          categories: categories.map(c => c.name)
+        }),
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const extracted = json.data;
+          
+          if (extracted.type === 'income' || extracted.type === 'expense') {
+            setType(extracted.type);
+          }
+          if (extracted.amount && !isNaN(Number(extracted.amount))) {
+            setAmountStr(String(extracted.amount));
+          }
+          if (extracted.description) {
+            setDescription(extracted.description);
+          }
+          if (extracted.category) {
+            const match = categories.find(c => c.name.toLowerCase() === extracted.category.toLowerCase());
+            if (match) setCategory(match.name);
+          }
+          if (extracted.paymentMethod) {
+            setPaymentMethod(extracted.paymentMethod as PaymentMethod);
+          }
+          if (extracted.date && /^\d{4}-\d{2}-\d{2}$/.test(extracted.date)) {
+            setDate(extracted.date);
+          }
+          if (extracted.notes) {
+            setNotes(extracted.notes);
+          }
+
+          setVoiceFeedback(`✓ IA processou com sucesso: "${text}"`);
+          setTimeout(() => setVoiceFeedback(null), 3500);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('AI Parsing failed, falling back to local:', err);
+    }
+
+    // 2. Fallback to local regex-based parsing if offline or AI fails
     const parsed = parseFinancialText(text, categories);
     setType(parsed.type);
     if (parsed.amount) {
@@ -316,6 +370,44 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     }
     if (parsed.notes) {
       setNotes(parsed.notes);
+    }
+    
+    setVoiceFeedback(`✓ Aplicado via motor local: "${text}"`);
+    setTimeout(() => setVoiceFeedback(null), 3500);
+  };
+
+  const [isCategorizing, setIsCategorizing] = useState(false);
+
+  const handleAutoCategorize = async () => {
+    if (!description.trim() || isCategorizing) return;
+    
+    setIsCategorizing(true);
+    try {
+      const res = await fetch('/api/ai/smart-parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: `Apenas categorize: "${description}"`,
+          categories: categories.map(c => c.name)
+        }),
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const json = await res.json();
+        if (json.success && json.data?.category) {
+          const match = categories.find(c => c.name.toLowerCase() === json.data.category.toLowerCase());
+          if (match) {
+            setCategory(match.name);
+            setVoiceFeedback(`✨ Categoria sugerida: ${match.name}`);
+            setTimeout(() => setVoiceFeedback(null), 3000);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Auto-categorization failed:', err);
+    } finally {
+      setIsCategorizing(false);
     }
   };
 
@@ -393,7 +485,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const toggleVoiceRecognition = async () => {
     if (!isPro) {
       if (onOpenSubscription) onOpenSubscription();
-      setVoiceFeedback('🎙️ A adição por voz via Inteligência Artificial é exclusiva do Plano Pro VIP!');
+      setVoiceFeedback('🎙️ A adição por voz via Inteligência Artificial é exclusiva da Assinatura Pro!');
       setTimeout(() => setVoiceFeedback(null), 5000);
       return;
     }
@@ -631,10 +723,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               <span>{editingTransaction ? 'Editar Lançamento' : 'Novo Lançamento'}</span>
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                100% Offline
+                Armazenamento Local
               </span>
             </h2>
-            <p className="text-[11px] text-slate-400">Preenchimento super rápido com voz e atalhos</p>
+            <p className="text-[11px] text-slate-400">Entrada de dados via inteligência artificial e atalhos</p>
           </div>
           <button
             onClick={onClose}
@@ -878,7 +970,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             <div>
               <p className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-amber-400" />
-                Lançamentos Frequentes (1 toque preenche tudo):
+                Lançamentos Frequentes (Acesso Rápido):
               </p>
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                 {DEFAULT_QUICK_PRESETS.map((preset) => (
@@ -1145,15 +1237,36 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
           {/* Category selection */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
                 <Tag className="w-3.5 h-3.5 text-emerald-400" />
                 Categoria
-              </span>
-              <span className="text-[11px] text-slate-400 font-normal">
-                Selecionada: <strong className="text-white">{category}</strong>
-              </span>
-            </label>
+              </label>
+              <div className="flex items-center gap-2">
+                {description.trim().length > 2 && (
+                  <button
+                    type="button"
+                    onClick={handleAutoCategorize}
+                    disabled={isCategorizing}
+                    className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg border transition active:scale-95 ${
+                      isCategorizing 
+                        ? 'bg-slate-800 text-slate-500 border-slate-700' 
+                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                    }`}
+                  >
+                    {isCategorizing ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3 h-3" />
+                    )}
+                    <span>Sugerir IA</span>
+                  </button>
+                )}
+                <span className="text-[11px] text-slate-400 font-normal">
+                  Selecionada: <strong className="text-white">{category}</strong>
+                </span>
+              </div>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-36 overflow-y-auto p-1 bg-slate-950/60 rounded-xl border border-slate-800">
               {filteredCategories.map((cat) => {
                 const isSelected = category === cat.name;

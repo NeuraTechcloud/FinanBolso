@@ -11,12 +11,17 @@ import {
   AlertCircle,
   HardDrive,
   Share2,
-  Calendar
+  Calendar,
+  Cloud,
+  CloudCheck,
+  UserCheck,
+  Landmark
 } from 'lucide-react';
 import { Transaction, Category, SavingsGoal } from '../../types/finance';
 import { ExportService, formatBRL } from '../../services/exportService';
 import { StorageService } from '../../services/storage';
 import { PWAInstallButton } from '../PWAInstallButton';
+import { useFirebase } from '../../contexts/FirebaseContext';
 
 interface ExportTabProps {
   transactions: Transaction[];
@@ -24,6 +29,7 @@ interface ExportTabProps {
   savingsGoals: SavingsGoal[];
   selectedMonth: string;
   onRefreshData: () => void;
+  onOpenBankImport?: () => void;
 }
 
 export const ExportTab: React.FC<ExportTabProps> = React.memo(({
@@ -32,7 +38,9 @@ export const ExportTab: React.FC<ExportTabProps> = React.memo(({
   savingsGoals,
   selectedMonth,
   onRefreshData,
+  onOpenBankImport,
 }) => {
+  const { user, isSyncing } = useFirebase();
   const [exportScope, setExportScope] = useState<'current' | 'all'>('current');
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
@@ -251,7 +259,38 @@ export const ExportTab: React.FC<ExportTabProps> = React.memo(({
         </div>
       </div>
 
+      {/* BANK STATEMENT IMPORT CARD */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/20 border border-slate-800 hover:border-emerald-500/40 rounded-3xl p-5 shadow-sm space-y-3 transition">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+              <Landmark className="w-6 h-6 stroke-[2]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white">Importar Extrato Bancário</h3>
+                <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  OFX & CSV
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed mt-0.5">
+                Importe extratos do Nubank, Inter, Itaú, Bradesco, Santander e outros. Detecta duplicatas e categoriza gastos automaticamente.
+              </p>
+            </div>
+          </div>
+        </div>
 
+        {onOpenBankImport && (
+          <button
+            type="button"
+            onClick={onOpenBankImport}
+            className="w-full py-3 px-4 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-emerald-500/40 text-emerald-400 font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition shadow-sm"
+          >
+            <Upload className="w-4 h-4 stroke-[2.5]" />
+            <span>Selecionar Arquivo de Extrato ou Colar Texto</span>
+          </button>
+        )}
+      </div>
 
       {/* PWA Install Block */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 shadow-sm space-y-3">
@@ -261,16 +300,27 @@ export const ExportTab: React.FC<ExportTabProps> = React.memo(({
         <PWAInstallButton variant="settings" />
       </div>
 
-      {/* Offline Storage Status & JSON Backup */}
+      {/* Hybrid Storage Status & JSON Backup */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-slate-800 text-emerald-400 flex items-center justify-center">
-              <HardDrive className="w-4 h-4" />
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+              user ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-blue-400'
+            }`}>
+              {user ? <Cloud className="w-4 h-4" /> : <HardDrive className="w-4 h-4" />}
             </div>
             <div>
-              <h4 className="text-xs font-bold text-white">Armazenamento Offline do Celular</h4>
-              <p className="text-[11px] text-slate-400">Totalmente privado, sem envio para servidores externos</p>
+              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                {user ? 'Sincronização em Nuvem (Google Firestore)' : 'Armazenamento Local Seguro (Modo Offline)'}
+                {user && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" title="Conexão em Tempo Real Ativa" />
+                )}
+              </h4>
+              <p className="text-[11px] text-slate-400">
+                {user 
+                  ? `Sincronizado em tempo real na nuvem (${user.email}) com backup local` 
+                  : 'Totalmente privado no aparelho. Faça login para sincronizar entre dispositivos.'}
+              </p>
             </div>
           </div>
           <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
@@ -317,22 +367,33 @@ export const ExportTab: React.FC<ExportTabProps> = React.memo(({
         </div>
       </div>
 
-      {/* Privacy & Offline Guarantee Box */}
-      <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-xs text-slate-300 space-y-2">
+      {/* Privacy & Hybrid Architecture Guarantee Box */}
+      <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-xs text-slate-300 space-y-3">
         <div className="flex items-start gap-3">
           <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="font-semibold text-emerald-300">Garantia de Privacidade & Offline Total</p>
+            <p className="font-semibold text-emerald-300">Garantia de Privacidade & Soberania dos Dados</p>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Seus dados financeiros residem exclusivamente no armazenamento do seu aparelho. 
-              Não há contas na nuvem, logins obrigatórios ou rastreadores. Você tem posse integral dos seus arquivos e relatórios.
+              O BolsoZen foi desenvolvido sob o princípio Local-First: seus lançamentos funcionam com total privacidade e velocidade local no seu aparelho. Quando você se conecta com sua conta, a sincronização é realizada diretamente com o Google Firebase Firestore, mantendo seus dados protegidos, criptografados e acessíveis em tempo real em qualquer dispositivo ou domínio — sem anúncios, sem rastreadores e com soberania integral sobre seus arquivos.
             </p>
           </div>
         </div>
 
-        <div className="pt-2 border-t border-emerald-500/15 flex items-center justify-between text-[10px] text-slate-400 font-mono">
-          <span>Identificação do Aparelho:</span>
-          <strong className="text-emerald-400">{StorageService.getDeviceId()}</strong>
+        <div className="pt-2 border-t border-emerald-500/15 space-y-1.5 text-[10px] text-slate-400 font-mono">
+          <div className="flex items-center justify-between">
+            <span>Identificação do Aparelho:</span>
+            <strong className="text-emerald-400">{StorageService.getDeviceId()}</strong>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Conta Conectada:</span>
+            <strong className="text-slate-200">{user ? (user.displayName || user.email) : 'Nenhuma (Modo Offline)'}</strong>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Status da Sincronização:</span>
+            <strong className={user ? 'text-emerald-400' : 'text-blue-400'}>
+              {user ? (isSyncing ? 'Sincronizando com Firestore...' : 'Nuvem Conectada (Tempo Real)') : 'Armazenamento Local Ativo'}
+            </strong>
+          </div>
         </div>
       </div>
 

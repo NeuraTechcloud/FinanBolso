@@ -654,6 +654,90 @@ app.post('/api/ai/parse-receipt', async (req, res) => {
   }
 });
 
+import { GoogleGenAI, Type } from "@google/genai";
+
+// ------------------------------------------------------------------
+// Gemini AI Initialization
+// ------------------------------------------------------------------
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
+
+// ------------------------------------------------------------------
+// 7. Smart AI Transaction Parser (Gemini Powered)
+// ------------------------------------------------------------------
+app.post('/api/ai/smart-parse', async (req, res) => {
+  try {
+    const { text, categories = [] } = req.body;
+
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ success: false, error: 'Texto não fornecido para processamento.' });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Serviço de IA não configurado. Por favor, adicione GEMINI_API_KEY ao .env.' 
+      });
+    }
+
+    const categoryList = categories.join(', ');
+    const systemInstruction = `Você é um assistente financeiro brasileiro especializado em extrair dados de transações de textos em linguagem natural ou transcrições de voz.
+Sua tarefa é converter o texto do usuário em um objeto JSON estruturado.
+Categorias disponíveis: [${categoryList}]
+Métodos de pagamento disponíveis: pix, credit_card, debit_card, boleto, ticket, cash, bank_transfer, other.
+
+REGRAS RÍGIDAS:
+1. Extraia o valor numérico (amount).
+2. Extraia uma descrição curta e clara.
+3. Determine o tipo: 'expense' (despesa) ou 'income' (receita/ganho).
+4. Mapeie para a categoria MAIS PRÓXIMA da lista fornecida. Se não houver correspondência clara, use a categoria 'Outros Gastos' ou 'Outras Entradas'.
+5. Tente identificar o método de pagamento.
+6. A data deve ser a data atual (YYYY-MM-DD) a menos que o usuário mencione especificamente outra data (ex: 'ontem', 'anteontem', 'semana passada').
+Data de Referência (Hoje): ${new Date().toISOString().split('T')[0]}
+
+RETORNE APENAS O JSON NO FORMATO:
+{
+  "amount": number,
+  "description": "string",
+  "category": "string",
+  "type": "expense" | "income",
+  "paymentMethod": "string",
+  "date": "YYYY-MM-DD",
+  "notes": "string"
+}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: text,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+      },
+    });
+
+    const parsedData = JSON.parse(response.text || '{}');
+
+    return res.json({
+      success: true,
+      data: parsedData,
+      source: 'gemini-ai'
+    });
+  } catch (error: any) {
+    console.error('Erro no processamento Gemini:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Falha ao processar texto com Inteligência Artificial.',
+      details: error.message
+    });
+  }
+});
+
 // ------------------------------------------------------------------
 // Vite Middleware Server Mounting
 // ------------------------------------------------------------------

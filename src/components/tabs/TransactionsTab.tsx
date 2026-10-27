@@ -15,7 +15,8 @@ import {
   Clock,
   Sparkles,
   Printer,
-  FileText
+  FileText,
+  Landmark
 } from 'lucide-react';
 import { Transaction, Category, PAYMENT_METHOD_LABELS } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
@@ -34,6 +35,7 @@ interface TransactionsTabProps {
   defaultSubTab?: 'history' | 'future' | 'ai_clusters';
   onTogglePaid?: (id: string) => void;
   onRemoveCompletedFixed?: () => void;
+  onOpenBankImport?: () => void;
 }
 
 interface TransactionRowProps {
@@ -41,9 +43,10 @@ interface TransactionRowProps {
   categoryColor: string;
   onSelect: (tx: Transaction) => void;
   onTogglePaid?: (id: string) => void;
+  tags?: string[];
 }
 
-const MemoizedTransactionRow = memo<TransactionRowProps>(({ tx, categoryColor, onSelect, onTogglePaid }) => {
+const MemoizedTransactionRow = memo<TransactionRowProps>(({ tx, categoryColor, onSelect, onTogglePaid, tags }) => {
   const isIncome = tx.type === 'income';
 
   return (
@@ -92,6 +95,15 @@ const MemoizedTransactionRow = memo<TransactionRowProps>(({ tx, categoryColor, o
             <span>•</span>
             <span>{formatDateBR(tx.date)}</span>
           </div>
+          {tags && tags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1 mt-1">
+              {tags.map((tag, idx) => (
+                <span key={idx} className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
           {tx.notes && (
             <p className="text-[10px] text-slate-500 truncate mt-0.5 italic">
               "{tx.notes}"
@@ -154,6 +166,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
   defaultSubTab = 'history',
   onTogglePaid,
   onRemoveCompletedFixed,
+  onOpenBankImport,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'history' | 'future' | 'ai_clusters'>(defaultSubTab);
   const [searchTerm, setSearchTerm] = useState('');
@@ -421,15 +434,28 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs hover:bg-emerald-400 transition active:scale-95 shadow"
-                title="Imprimir ou baixar relatório PDF"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Baixar PDF</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {onOpenBankImport && (
+                  <button
+                    type="button"
+                    onClick={onOpenBankImport}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:border-emerald-500/50 text-emerald-400 font-bold text-xs hover:bg-slate-700 transition active:scale-95 shadow"
+                    title="Importar extrato bancário em formato OFX ou CSV"
+                  >
+                    <Landmark className="w-3.5 h-3.5" />
+                    <span>Importar Extrato</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs hover:bg-emerald-400 transition active:scale-95 shadow"
+                  title="Imprimir ou baixar relatório PDF"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Baixar PDF</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800 text-center">
@@ -762,16 +788,19 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Organização Inteligente por IA
+                    Análise Estrutural por IA
                   </h4>
                   <p className="text-[10px] text-slate-400">
-                    Análise e classificação automática de receitas e despesas
+                    Classificação analítica e agrupamento inteligente de fluxo
                   </p>
                 </div>
               </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                Sem travas ou limites
-              </span>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/15 border border-purple-500/30">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                <span className="text-[10px] font-bold text-purple-300 uppercase tracking-tight">
+                  Processamento em Tempo Real
+                </span>
+              </div>
             </div>
 
             <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-xs">
@@ -841,31 +870,16 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = memo(({
                   <p className="text-[11px] text-slate-500 py-2 text-center">Nenhum lançamento nesta categoria neste período.</p>
                 ) : (
                   <div className="space-y-2 max-h-60 overflow-y-auto nested-scroll pr-1">
-                    {cluster.items.map(t => {
-                      const tags = aiResult.taggedTransactions.get(t.id) || [];
-                      return (
-                        <div
-                          key={t.id}
-                          onClick={() => onSelectTransaction(t)}
-                          className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-slate-700 transition flex items-center justify-between gap-2 cursor-pointer active:scale-98"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-white truncate">{t.description}</p>
-                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                              <span className="text-[9px] text-slate-400">{formatDateBR(t.date)}</span>
-                              {tags.map((tag, idx) => (
-                                <span key={idx} className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <span className={`text-xs font-bold tabular-nums shrink-0 ${t.type === 'income' ? 'text-emerald-400' : 'text-slate-200'}`}>
-                            {t.type === 'income' ? '+' : ''}{formatBRL(t.amount)}
-                          </span>
-                        </div>
-                      );
-                    })}
+                    {cluster.items.map(t => (
+                      <MemoizedTransactionRow
+                        key={t.id}
+                        tx={t}
+                        categoryColor={categoryColorMap[t.category] || '#94a3b8'}
+                        onSelect={onSelectTransaction}
+                        onTogglePaid={onTogglePaid}
+                        tags={aiResult.taggedTransactions.get(t.id)}
+                      />
+                    ))}
                   </div>
                 )}
               </div>

@@ -494,7 +494,7 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <TrendingUpIcon className="w-3.5 h-3.5" />
           <span className="truncate">Orçamentos</span>
         </button>
         <button
@@ -515,8 +515,8 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold text-white">Metas de Economia</h2>
-              <p className="text-[11px] text-slate-400">Guarde dinheiro para seus objetivos</p>
+              <h2 className="text-sm font-bold text-white">Objetivos de Acumulação</h2>
+              <p className="text-[11px] text-slate-400">Gerenciamento de reservas e metas de capital</p>
             </div>
             <button
               onClick={() => handleOpenGoalModal()}
@@ -558,8 +558,8 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold text-white">Tetos de Gastos por Categoria</h2>
-              <p className="text-[11px] text-slate-400">Controle seus limites mensais de gastos</p>
+              <h2 className="text-sm font-bold text-white">Planejamento Orçamentário por Categoria</h2>
+              <p className="text-[11px] text-slate-400">Defina e monitore objetivos de gastos mensais</p>
             </div>
             <button
               onClick={() => {
@@ -675,8 +675,8 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold text-white">Lembretes & Contas a Vencer</h2>
-              <p className="text-[11px] text-slate-400">Nunca mais perca prazos de faturas e boletos</p>
+              <h2 className="text-sm font-bold text-white">Gestão de Compromissos & Vencimentos</h2>
+              <p className="text-[11px] text-slate-400">Monitoramento de faturas e obrigações financeiras</p>
             </div>
             <button
               onClick={() => {

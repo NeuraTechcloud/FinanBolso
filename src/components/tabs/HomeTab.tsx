@@ -298,7 +298,7 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
 
   return (
     <div className="space-y-4 pb-24 animate-in fade-in">
-      {/* 🏛️ Net Worth / Visão de Patrimônio */}
+      {/* Visão de Patrimônio Consolidada */}
       <NetWorthCard {...netWorthData} />
 
       {/* Top Cards Section: Responsive Grid */}
@@ -321,7 +321,7 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
                 </span>
               ) : (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  Contas em dia ✓
+                  Fluxo de Caixa Estável
                 </span>
               )}
             </div>
@@ -452,7 +452,7 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
         <div className="flex items-center justify-between text-xs">
           <span className="font-bold text-white flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5 text-amber-400" />
-            Lançamento Instantâneo (1 Toque)
+            Atalhos de Lançamento
           </span>
           <span className="text-[10px] text-slate-400">Toque para preencher e salvar</span>
         </div>
@@ -500,9 +500,9 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
             <CheckCircle2 className="w-6 h-6 stroke-[2]" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white">Ambiente Pronto para Uso Real</h3>
+            <h3 className="text-sm font-bold text-white">Monitoramento de Fluxo Ativo</h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed mt-1">
-              Sua base de dados está limpa e dedicada exclusivamente aos seus registros financeiros reais. Adicione suas receitas e despesas para iniciar o controle e planejamento.
+              Sua base de dados está pronta para receber novos registros financeiros. Adicione suas receitas e despesas para iniciar o planejamento estratégico.
             </p>
           </div>
 
@@ -512,7 +512,7 @@ export const HomeTab: React.FC<HomeTabProps> = memo(({
               className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md transition active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              <span>Adicionar Meu Primeiro Gasto</span>
+              <span>Lançar Despesa</span>
             </button>
           </div>
         </div>

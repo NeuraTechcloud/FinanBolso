@@ -132,7 +132,7 @@ export const ExportService = {
     const periodLabel = options?.monthFilter && options.monthFilter !== 'all' 
       ? `_${options.monthFilter}` 
       : `_geral_${new Date().toISOString().slice(0, 10)}`;
-    const filename = `FinanBolso_Relatorio${periodLabel}.xlsx`;
+    const filename = `BolsoZen_Relatorio${periodLabel}.xlsx`;
 
     // Download file
     XLSX.writeFile(wb, filename);
@@ -185,12 +185,12 @@ export const ExportService = {
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(18);
-    doc.text('FinanBolso - Relatório Financeiro', 14, 13);
+    doc.text('BolsoZen - Relatório Financeiro', 14, 13);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     const scope = options?.periodLabel || (options?.monthFilter && options.monthFilter !== 'all' ? `Competência: ${options.monthFilter}` : 'Período Completo');
-    doc.text(`Offline & Seguro  •  ${scope}`, 14, 21);
+    doc.text(`Gestão Financeira & Nuvem Segura  •  ${scope}`, 14, 21);
 
     const emissionDate = new Date().toLocaleDateString('pt-BR', { 
       day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
@@ -361,7 +361,7 @@ export const ExportService = {
         doc.setFontSize(8);
         doc.setTextColor(100, 116, 139);
         doc.text(
-          'FinanBolso • Aplicativo de Controle Financeiro Offline', 
+          'BolsoZen • Gestão Financeira Inteligente & Nuvem Segura', 
           14, 
           pageHeight - 4.5
         );
@@ -377,7 +377,7 @@ export const ExportService = {
     const periodSuffix = options?.monthFilter && options.monthFilter !== 'all' 
       ? `_${options.monthFilter}` 
       : `_completo_${new Date().toISOString().slice(0, 10)}`;
-    const filename = `FinanBolso_Extrato${periodSuffix}.pdf`;
+    const filename = `BolsoZen_Extrato${periodSuffix}.pdf`;
 
     doc.save(filename);
   }

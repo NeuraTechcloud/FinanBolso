@@ -27,6 +27,17 @@ export interface AuthorizedKey {
   createdAt?: number;
 }
 
+export function isActivationKeyUsed(data: any): boolean {
+  if (!data) return false;
+  if (data.isUsed === true) return true;
+  if (data.status === 'used') return true;
+  if (data.status === 'available') return false;
+  if (data.isUsed === false) return false;
+  if (typeof data.usedAt === 'number' && data.usedAt > 0) return true;
+  if (typeof data.usedBy === 'string' && data.usedBy.trim() !== '' && data.usedBy !== 'null' && data.usedBy !== 'undefined') return true;
+  return false;
+}
+
 const STORAGE_AUTHORIZED_KEYS = 'finanbolso_authorized_keys_v1';
 
 // Initial keys authorized by administration (starts empty for fresh creation)
@@ -66,7 +77,7 @@ export const ActivationService = {
       key: cleanKey,
       durationDays,
       issuedAt: Date.now(),
-      label: label || `Licença Oficial (${durationDays}d)`,
+      label: label || `Licença Corporativa (${durationDays}d)`,
       isUsed: false,
       status: 'available',
       usedBy: undefined,
@@ -117,7 +128,7 @@ export const ActivationService = {
     const part1 = generateRandomSegment(4);
     const part2 = generateRandomSegment(4);
     const key = `${prefix}-${part1}-${part2}`;
-    await this.registerAuthorizedKey(key, durationDays, label || `Ativação Automática (${durationDays}d)`, autoUseEmail);
+    await this.registerAuthorizedKey(key, durationDays, label || `Emissão de Sistema (${durationDays}d)`, autoUseEmail);
     return key;
   },
 
@@ -145,8 +156,8 @@ export const ActivationService = {
       if (keyDoc.exists()) {
         const data = keyDoc.data();
 
-        // STRICT SINGLE-USE LOCK: If already used by ANYONE, reject immediately!
-        if (data.isUsed === true || data.status === 'used' || data.usedAt || data.usedBy) {
+        // STRICT SINGLE-USE LOCK: Check if key was actually used
+        if (isActivationKeyUsed(data)) {
           const usedDateStr = data.usedAt ? ` em ${new Date(data.usedAt).toLocaleDateString('pt-BR')}` : '';
           return {
             valid: false,
@@ -154,13 +165,17 @@ export const ActivationService = {
             planName: '',
             activationId: id,
             deviceId,
-            message: `Esta chave de ativação já foi utilizada${usedDateStr} (uso único) e não pode ser usada novamente.`,
+            message: `Esta chave de ativação já foi utilizada${usedDateStr} (uso único) e não pode ser reutilizada.`,
           };
         }
 
         // Mark key as USED in Firestore (single-use lock registered)
         try {
           await setDoc(firestoreDoc(db, 'activations', id), {
+            key: id,
+            durationDays: data.durationDays === 365 ? 365 : 30,
+            issuedAt: data.issuedAt || Date.now(),
+            label: data.label || 'Licença Pro',
             isUsed: true,
             status: 'used',
             usedBy: userIdentifier,
@@ -202,8 +217,8 @@ export const ActivationService = {
     const authorizedList = this.getAuthorizedKeys();
     const localMatch = authorizedList.find(k => k.key.toUpperCase() === id);
     if (localMatch) {
-      // STRICT SINGLE-USE LOCK: If already used locally, reject immediately!
-      if (localMatch.isUsed === true || localMatch.status === 'used' || localMatch.usedAt || localMatch.usedBy) {
+      // STRICT SINGLE-USE LOCK: Check if key was actually used locally
+      if (isActivationKeyUsed(localMatch)) {
         const usedDateStr = localMatch.usedAt ? ` em ${new Date(localMatch.usedAt).toLocaleDateString('pt-BR')}` : '';
         return {
           valid: false,
@@ -211,7 +226,7 @@ export const ActivationService = {
           planName: '',
           activationId: localMatch.key,
           deviceId,
-          message: `Esta chave de ativação já foi utilizada${usedDateStr} (uso único) e não pode ser usada novamente.`,
+          message: `Esta chave de ativação já foi utilizada${usedDateStr} (uso único) e não pode ser reutilizada.`,
         };
       }
 
@@ -293,7 +308,7 @@ export const ActivationService = {
   async buildSubscription(durationDays: 30 | 365, activationId?: string): Promise<UserSubscription> {
     const days = durationDays === 30 ? 30 : 365;
     const now = Date.now();
-    const id = activationId || await this.generateActivationId(days, 'Ativação Acumulada');
+    const id = activationId || await this.generateActivationId(days, 'Upgrade de Assinatura');
     const deviceId = StorageService.getDeviceId();
 
     const currentSub = StorageService.getSubscription();

@@ -1,4 +1,5 @@
 import { Transaction, Category } from '../types/finance';
+import { formatBRL } from './exportService';
 
 export type AIClusterType = 'priority_debts' | 'fixed_essential' | 'variable_lifestyle' | 'income_sources';
 
@@ -104,7 +105,7 @@ export function organizeTransactionsWithAI(
     } else {
       variableLifestyleItems.push(t);
       variableTotal += t.amount;
-      tags.push('Variável Otimizável');
+      tags.push('Despesa Discricionária');
     }
 
     if (t.isRecurring) {
@@ -152,19 +153,19 @@ export function organizeTransactionsWithAI(
   const debtRatioPercent = totalExpense > 0 ? Math.round((debtTotal / totalExpense) * 100) : 0;
   const savingsPotentialEstimate = Math.round(variableTotal * 0.15);
 
-  let summaryText = 'Suas finanças estão equilibradas neste período.';
+  let summaryText = 'Suas finanças apresentam um bom equilíbrio operacional no período analisado.';
   if (debtRatioPercent > 35) {
-    summaryText = `Atenção: ${debtRatioPercent}% das suas despesas estão concentradas em dívidas e cartões. Foque na quitação prioritária.`;
+    summaryText = `Análise de Risco: Identificamos que ${debtRatioPercent}% das despesas estão concentradas em dívidas e cartões. Recomendamos priorizar a quitação para evitar juros.`;
   } else if (variableRatioPercent > 45) {
-    summaryText = `Você possui um potencial de economia estimado em R$ ${savingsPotentialEstimate} reduzindo 15% das despesas variáveis.`;
+    summaryText = `Otimização Disponível: Existe um potencial de economia de aproximadamente ${formatBRL(savingsPotentialEstimate)} através de ajustes em gastos variáveis.`;
   } else if (essentialRatioPercent > 60) {
-    summaryText = `Seus custos fixos essenciais comprometem ${essentialRatioPercent}% das despesas. Mantenha os custos essenciais sob controle.`;
+    summaryText = `Estrutura de Custos: Os gastos essenciais fixos comprometem ${essentialRatioPercent}% da sua receita. Mantenha o monitoramento para garantir margem de segurança.`;
   }
 
   const clusters: AICluster[] = [
     {
       id: 'priority_debts',
-      title: 'Dívidas & Cartões (Prioridade Alta)',
+      title: 'Passivos & Compromissos de Crédito',
       badge: 'Juros / Cartão',
       color: 'text-amber-400',
       bgColor: 'bg-amber-500/10',
@@ -175,7 +176,7 @@ export function organizeTransactionsWithAI(
     },
     {
       id: 'fixed_essential',
-      title: 'Contas Fixas & Essenciais',
+      title: 'Custos Operacionais Essenciais',
       badge: 'Manutenção da Vida',
       color: 'text-blue-400',
       bgColor: 'bg-blue-500/10',
@@ -186,7 +187,7 @@ export function organizeTransactionsWithAI(
     },
     {
       id: 'variable_lifestyle',
-      title: 'Despesas Variáveis & Otimizáveis',
+      title: 'Despesas Flexíveis & Estilo de Vida',
       badge: 'Potencial de Economia',
       color: 'text-purple-400',
       bgColor: 'bg-purple-500/10',
@@ -197,7 +198,7 @@ export function organizeTransactionsWithAI(
     },
     {
       id: 'income_sources',
-      title: 'Entradas & Fontes de Renda',
+      title: 'Fluxos de Receita & Entradas',
       badge: 'Receitas',
       color: 'text-emerald-400',
       bgColor: 'bg-emerald-500/10',

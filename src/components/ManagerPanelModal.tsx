@@ -29,7 +29,7 @@ import {
 import { PaymentIntegrationGuide } from './PaymentIntegrationGuide';
 import { formatBRL, formatDateBR } from '../services/exportService';
 import { UserSubscription } from '../types/finance';
-import { ActivationService } from '../services/activationService';
+import { ActivationService, isActivationKeyUsed } from '../services/activationService';
 import { StorageService } from '../services/storage';
 import { FirestoreService } from '../services/firestore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -157,7 +157,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
             key: lk.key,
             duration: lk.durationDays,
             createdAt: lk.label || `Chave ${lk.durationDays}d`,
-            isUsed: lk.isUsed === true || lk.status === 'used' || !!lk.usedBy || !!lk.usedAt,
+            isUsed: isActivationKeyUsed(lk),
             usedBy: lk.usedBy || null,
             usedAt: lk.usedAt || null,
           }))
@@ -188,7 +188,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
               key: lk.key,
               duration: lk.durationDays,
               createdAt: lk.label || `Chave ${lk.durationDays}d`,
-              isUsed: lk.isUsed === true || lk.status === 'used' || !!lk.usedBy || !!lk.usedAt,
+              isUsed: isActivationKeyUsed(lk),
               usedBy: lk.usedBy || null,
               usedAt: lk.usedAt || null,
             });
@@ -206,7 +206,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
               key: k.key,
               duration: k.durationDays,
               createdAt: k.label || `Chave ${k.durationDays}d`,
-              isUsed: k.isUsed === true || k.status === 'used' || !!k.usedBy || !!k.usedAt,
+              isUsed: isActivationKeyUsed(k),
               usedBy: k.usedBy || null,
               usedAt: k.usedAt || null,
             });
@@ -356,7 +356,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   };
 
   const handleRenewPro = async (sub: Subscriber, durationDays: 30 | 365) => {
-    const newActivationId = await ActivationService.generateActivationId(durationDays, `Renovação ADM ${sub.name}`);
+    const newActivationId = await ActivationService.generateActivationId(durationDays, `Renovação de Assinatura: ${sub.name}`);
     const planTitle = durationDays === 30 ? 'Pro Mensal' : 'Pro Anual';
     const expiresTimestamp = Date.now() + durationDays * 24 * 60 * 60 * 1000;
 
@@ -391,7 +391,7 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
   };
 
   const handleGrantUserPro = async (u: AppUser, durationDays: 30 | 365) => {
-    const newActivationId = await ActivationService.generateActivationId(durationDays, `Ativação USER ${u.displayName || u.email}`);
+    const newActivationId = await ActivationService.generateActivationId(durationDays, `Liberação Manual: ${u.displayName || u.email}`);
     const planTitle = durationDays === 30 ? 'Pro Mensal' : 'Pro Anual';
     const expiresTimestamp = Date.now() + durationDays * 24 * 60 * 60 * 1000;
 
@@ -852,13 +852,13 @@ export const ManagerPanelModal: React.FC<ManagerPanelModalProps> = ({
                                 onClick={() => handleGrantUserPro(u, 30)}
                                 className="flex-1 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 text-[10px] font-bold rounded-lg border border-blue-600/30 transition"
                               >
-                                Tornar PRO 30d
+                                Ativar Plano 30d
                               </button>
                               <button 
                                 onClick={() => handleGrantUserPro(u, 365)}
                                 className="flex-1 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-[10px] font-bold rounded-lg border border-emerald-600/30 transition"
                               >
-                                Tornar PRO 365d
+                                Ativar Plano 365d
                               </button>
                               {userPro && (
                                 <button 

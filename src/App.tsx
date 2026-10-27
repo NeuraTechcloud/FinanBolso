@@ -10,6 +10,7 @@ import { SubscriptionModal } from './components/SubscriptionModal';
 import { ManagerPanelModal } from './components/ManagerPanelModal';
 import { EmailAuthModal } from './components/EmailAuthModal';
 import { UserProfileModal } from './components/UserProfileModal';
+import { BankStatementImportModal } from './components/BankStatementImportModal';
 import { HomeTab } from './components/tabs/HomeTab';
 import { ChartsTab } from './components/tabs/ChartsTab';
 import { TransactionsTab } from './components/tabs/TransactionsTab';
@@ -45,6 +46,7 @@ function AppContent() {
   const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);
   const [isEmailAuthModalOpen, setIsEmailAuthModalOpen] = useState(false);
   const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
+  const [isBankImportModalOpen, setIsBankImportModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -697,6 +699,7 @@ function AppContent() {
                   defaultSubTab={transactionsSubTab}
                   onTogglePaid={handleTogglePaid}
                   onRemoveCompletedFixed={handleCleanCompletedFixedPayments}
+                  onOpenBankImport={() => setIsBankImportModalOpen(true)}
                 />
               )}
 
@@ -721,6 +724,7 @@ function AppContent() {
                   savingsGoals={savingsGoals}
                   selectedMonth={selectedMonth}
                   onRefreshData={loadData}
+                  onOpenBankImport={() => setIsBankImportModalOpen(true)}
                 />
               )}
             </motion.div>
@@ -777,6 +781,14 @@ function AppContent() {
           subscription={subscription}
           onLogout={logout}
           onOpenSubscription={handleOpenSubscriptionModal}
+        />
+        {/* Bank Statement Import Modal (OFX / CSV) */}
+        <BankStatementImportModal
+          isOpen={isBankImportModalOpen}
+          onClose={() => setIsBankImportModalOpen(false)}
+          categories={categories}
+          existingTransactions={transactions}
+          onImportTransactions={handleSaveTransaction}
         />
       </div>
     </div>

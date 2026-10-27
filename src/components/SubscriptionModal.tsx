@@ -184,12 +184,12 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
           <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-300 p-0.5 shadow-xl shadow-emerald-500/20 flex items-center justify-center">
             <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-              <Crown className="w-7 h-7 text-emerald-400 animate-bounce" />
+              <Crown className="w-7 h-7 text-emerald-400" />
             </div>
           </div>
 
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 mb-2">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Clube BolsoZen VIP
+            Assinatura BolsoZen Pro
           </span>
 
           <h2 className="text-xl font-extrabold text-white">Eleve seu Controle Financeiro</h2>

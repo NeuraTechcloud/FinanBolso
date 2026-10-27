@@ -161,7 +161,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                 ? 'text-amber-300 bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25' 
                 : 'text-amber-300 bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25'
             }`}
-            title="Clube FinanBolso Pro"
+            title="Assinatura FinanBolso Pro"
           >
             <Crown className="w-3.5 h-3.5 text-amber-400" />
             <span>{isPro ? `${remainingDays}d Pro` : 'Seja Pro'}</span>
