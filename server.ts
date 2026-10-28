@@ -752,14 +752,28 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(process.cwd(), 'dist')));
+    // Serve immutable hashed assets with 1 year cache
+    app.use('/assets', express.static(path.join(process.cwd(), 'dist', 'assets'), {
+      maxAge: '1y',
+      immutable: true,
+    }));
+    // Serve other static files with 1 hour cache
+    app.use(express.static(path.join(process.cwd(), 'dist'), {
+      maxAge: '1h',
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      }
+    }));
     app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
     });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Servidor FinanBolso rodando na porta ${PORT}`);
+    console.log(`🚀 Servidor BolsoZen rodando na porta ${PORT}`);
   });
 }
 

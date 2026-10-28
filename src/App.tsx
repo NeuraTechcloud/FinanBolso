@@ -25,7 +25,7 @@ import { FirebaseProvider, useFirebase } from './contexts/FirebaseContext';
 import { FirestoreService } from './services/firestore';
 
 function AppContent() {
-  const { user, signIn, logout, isSyncing } = useFirebase();
+  const { user, loading: authLoading, signIn, logout, isSyncing } = useFirebase();
   const [transactions, setTransactions] = useState<Transaction[]>(() => StorageService.getTransactions());
   const [categories, setCategories] = useState<Category[]>(() => StorageService.getCategories());
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(() => StorageService.getSavingsGoals());
@@ -150,6 +150,8 @@ function AppContent() {
 
   // Clear or reload data on auth change
   useEffect(() => {
+    if (authLoading) return;
+
     if (!user) {
       setTransactions([]);
       setCategories(DEFAULT_CATEGORIES);
@@ -168,7 +170,7 @@ function AppContent() {
       setSavingsGoals(StorageService.getSavingsGoals());
       setReminders(StorageService.getReminders());
     }
-  }, [user]);
+  }, [user, authLoading]);
 
 
   // Firestore Real-time Sync

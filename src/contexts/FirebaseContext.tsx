@@ -32,35 +32,40 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
       
       if (user) {
-        // Save user profile to Firestore
-        await FirestoreService.saveUser(user);
+        // Asynchronously update profile in background without blocking app render
+        FirestoreService.saveUser(user).catch((e) => console.warn('User profile sync:', e));
         
-        // If user already has an active Pro subscription locally, ensure it is linked to user account in Firestore
+        // Link active local subscription in background if pro
         const localSub = StorageService.getSubscription();
         if (localSub && localSub.isPro) {
-          await FirestoreService.saveUserSubscription(user.uid, localSub);
+          FirestoreService.saveUserSubscription(user.uid, localSub).catch((e) => console.warn('Subscription sync:', e));
         }
 
-        // Trigger initial migration if needed
-        const localTxs = StorageService.getTransactions();
-        if (localTxs.length > 0) {
-          setIsSyncing(true);
-          try {
-            await FirestoreService.uploadUserData(user.uid, {
+        // Only run initial migration ONCE per user account, never on every refresh
+        const migrationKey = `bolsozen_migrated_${user.uid}`;
+        if (!localStorage.getItem(migrationKey)) {
+          const localTxs = StorageService.getTransactions();
+          if (localTxs.length > 0) {
+            setIsSyncing(true);
+            FirestoreService.uploadUserData(user.uid, {
               transactions: localTxs,
               categories: StorageService.getCategories(),
               goals: StorageService.getSavingsGoals(),
               reminders: StorageService.getReminders()
+            }).then(() => {
+              localStorage.setItem(migrationKey, 'true');
+            }).catch((e) => {
+              console.warn('Initial sync notice:', e);
+            }).finally(() => {
+              setIsSyncing(false);
             });
-          } catch (e) {
-            console.error('Initial sync failed:', e);
-          } finally {
-            setIsSyncing(false);
+          } else {
+            localStorage.setItem(migrationKey, 'true');
           }
         }
       }

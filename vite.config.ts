@@ -14,9 +14,9 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
-          name: 'FinanBolso - Controle Financeiro VIP',
-          short_name: 'FinanBolso',
-          description: 'Controle financeiro pessoal móvel offline com gráficos detalhados, metas de economia e exportação.',
+          name: 'BolsoZen — Tranquilidade Financeira',
+          short_name: 'BolsoZen',
+          description: 'Controle financeiro pessoal inteligente, seguro e offline com sincronização em nuvem e inteligência artificial.',
           theme_color: '#022c22',
           background_color: '#020617',
           display: 'standalone',
