@@ -27,7 +27,10 @@ import { FirestoreService } from './services/firestore';
 function AppContent() {
   const { user, loading: authLoading, signIn, logout, isSyncing } = useFirebase();
   const [transactions, setTransactions] = useState<Transaction[]>(() => StorageService.getTransactions());
-  const [categories, setCategories] = useState<Category[]>(() => StorageService.getCategories());
+  const [categories, setCategories] = useState<Category[]>(() => {
+    const saved = StorageService.getCategories();
+    return saved && saved.length > 0 ? saved : DEFAULT_CATEGORIES;
+  });
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(() => StorageService.getSavingsGoals());
   const [reminders, setReminders] = useState<Reminder[]>(() => StorageService.getReminders());
   
@@ -166,7 +169,8 @@ function AppContent() {
       });
     } else {
       setTransactions(StorageService.getTransactions());
-      setCategories(StorageService.getCategories());
+      const loadedCats = StorageService.getCategories();
+      setCategories(loadedCats && loadedCats.length > 0 ? loadedCats : DEFAULT_CATEGORIES);
       setSavingsGoals(StorageService.getSavingsGoals());
       setReminders(StorageService.getReminders());
     }
@@ -203,9 +207,19 @@ function AppContent() {
     }));
 
     unsubs.push(FirestoreService.subscribeCategories(user.uid, (cats) => {
-      if (cats.length > 0) {
+      if (cats && cats.length > 0) {
         setCategories(cats);
         StorageService.saveCategories(cats);
+      } else {
+        // New account or empty cloud categories: auto-seed DEFAULT_CATEGORIES in cloud & local
+        const defaultCats = DEFAULT_CATEGORIES;
+        setCategories(defaultCats);
+        StorageService.saveCategories(defaultCats);
+        defaultCats.forEach(c => {
+          FirestoreService.saveCategory(user.uid, c).catch(err => {
+            console.warn('Auto-provisioning category in cloud:', err);
+          });
+        });
       }
     }));
 

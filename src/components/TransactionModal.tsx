@@ -33,6 +33,7 @@ import {
   Category, 
   PAYMENT_METHOD_LABELS,
   DEFAULT_QUICK_PRESETS,
+  DEFAULT_CATEGORIES,
   QuickPreset
 } from '../types/finance';
 import { motion, AnimatePresence } from 'motion/react';
@@ -459,7 +460,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setRecurrenceMode('single');
       setDurationMonths(6);
       setInstallmentCount(3);
-      const defaultCat = categories.find(c => c.type === initialType);
+      const safeCats = categories && categories.length > 0 ? categories : DEFAULT_CATEGORIES;
+      const defaultCat = safeCats.find(c => c.type === initialType);
       if (defaultCat) setCategory(defaultCat.name);
     }
     setIsConfirmingDelete(false);
@@ -468,7 +470,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   if (!isOpen) return null;
 
-  const filteredCategories = categories.filter(c => c.type === type);
+  const safeCats = categories && categories.length > 0 ? categories : DEFAULT_CATEGORIES;
+  const filteredCategories = safeCats.filter(c => c.type === type);
 
   // Quick Preset Click
   const handleApplyPreset = (preset: QuickPreset) => {

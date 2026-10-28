@@ -135,9 +135,15 @@ export const StorageService = {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
       if (!data) {
-        return [];
+        this.saveCategories(DEFAULT_CATEGORIES);
+        return DEFAULT_CATEGORIES;
       }
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        this.saveCategories(DEFAULT_CATEGORIES);
+        return DEFAULT_CATEGORIES;
+      }
+      return parsed;
     } catch (e) {
       console.error('Erro ao carregar categorias offline:', e);
       return DEFAULT_CATEGORIES;

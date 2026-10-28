@@ -21,7 +21,7 @@ import {
   TrendingUp as TrendingUpIcon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { SavingsGoal, Category, Transaction, Reminder, PaymentMethod, GoalHistoryEntry } from '../../types/finance';
+import { SavingsGoal, Category, Transaction, Reminder, PaymentMethod, GoalHistoryEntry, DEFAULT_CATEGORIES } from '../../types/finance';
 import { formatBRL, formatDateBR } from '../../services/exportService';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoalSimulator } from '../GoalSimulator';
@@ -666,6 +666,23 @@ export const GoalsTab: React.FC<GoalsTabProps> = memo(({
                 </motion.div>
               );
             })}
+
+            {categories.filter(c => c.type === 'expense').length === 0 && (
+              <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl text-center space-y-3">
+                <FolderPlus className="w-8 h-8 text-emerald-400 mx-auto opacity-80" />
+                <div>
+                  <p className="text-xs font-bold text-white">Nenhuma categoria cadastrada</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Carregue o conjunto de categorias padrão completo com 1 toque.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onUpdateCategories(DEFAULT_CATEGORIES)}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition shadow-md active:scale-95"
+                >
+                  Carregar Categorias Padrão
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

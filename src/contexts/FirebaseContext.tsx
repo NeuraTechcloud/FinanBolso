@@ -12,6 +12,7 @@ import {
 import { auth } from '../lib/firebase';
 import { FirestoreService } from '../services/firestore';
 import { StorageService } from '../services/storage';
+import { DEFAULT_CATEGORIES } from '../types/finance';
 
 interface FirebaseContextType {
   user: User | null;
@@ -50,11 +51,14 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const migrationKey = `bolsozen_migrated_${user.uid}`;
         if (!localStorage.getItem(migrationKey)) {
           const localTxs = StorageService.getTransactions();
+          const localCats = StorageService.getCategories();
+          const catsToUse = localCats && localCats.length > 0 ? localCats : DEFAULT_CATEGORIES;
+
           if (localTxs.length > 0) {
             setIsSyncing(true);
             FirestoreService.uploadUserData(user.uid, {
               transactions: localTxs,
-              categories: StorageService.getCategories(),
+              categories: catsToUse,
               goals: StorageService.getSavingsGoals(),
               reminders: StorageService.getReminders()
             }).then(() => {
@@ -65,6 +69,10 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               setIsSyncing(false);
             });
           } else {
+            // New user on fresh device: seed categories to Firestore
+            catsToUse.forEach(cat => {
+              FirestoreService.saveCategory(user.uid, cat).catch(() => {});
+            });
             localStorage.setItem(migrationKey, 'true');
           }
         }
