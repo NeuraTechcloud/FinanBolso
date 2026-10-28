@@ -311,15 +311,15 @@ export const ExportTab: React.FC<ExportTabProps> = React.memo(({
             </div>
             <div>
               <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                {user ? 'Sincronização em Nuvem (Google Firestore)' : 'Armazenamento Local Seguro (Modo Offline)'}
+                {user ? 'Sincronização em Nuvem Ativa' : 'Armazenamento Seguro no Aparelho'}
                 {user && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" title="Conexão em Tempo Real Ativa" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" title="Sincronização em tempo real ativa" />
                 )}
               </h4>
               <p className="text-[11px] text-slate-400">
                 {user 
-                  ? `Sincronizado em tempo real na nuvem (${user.email}) com backup local` 
-                  : 'Totalmente privado no aparelho. Faça login para sincronizar entre dispositivos.'}
+                  ? `Conectado como ${user.email} • Seus dados estão salvos e protegidos.` 
+                  : 'Modo offline privado. Conecte sua conta para acessar em qualquer lugar.'}
               </p>
             </div>
           </div>
@@ -367,14 +367,16 @@ export const ExportTab: React.FC<ExportTabProps> = React.memo(({
         </div>
       </div>
 
-      {/* Privacy & Hybrid Architecture Guarantee Box */}
+      {/* Privacy & BolsoZen Tranquilidade Box */}
       <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-xs text-slate-300 space-y-3">
         <div className="flex items-start gap-3">
           <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="font-semibold text-emerald-300">Garantia de Privacidade & Soberania dos Dados</p>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              O BolsoZen foi desenvolvido sob o princípio Local-First: seus lançamentos funcionam com total privacidade e velocidade local no seu aparelho. Quando você se conecta com sua conta, a sincronização é realizada diretamente com o Google Firebase Firestore, mantendo seus dados protegidos, criptografados e acessíveis em tempo real em qualquer dispositivo ou domínio — sem anúncios, sem rastreadores e com soberania integral sobre seus arquivos.
+            <p className="font-semibold text-emerald-300 flex items-center gap-1.5">
+              <span>Privacidade & Tranquilidade BolsoZen</span>
+            </p>
+            <p className="text-[11px] text-slate-300/90 leading-relaxed">
+              No BolsoZen, sua tranquilidade financeira vem com privacidade absoluta. Seus dados são 100% seus: funcionam em sigilo total no seu aparelho e contam com backup seguro e criptografado na nuvem. Sem anúncios, sem rastreadores e com total paz de espírito.
             </p>
           </div>
         </div>
@@ -386,12 +388,12 @@ export const ExportTab: React.FC<ExportTabProps> = React.memo(({
           </div>
           <div className="flex items-center justify-between">
             <span>Conta Conectada:</span>
-            <strong className="text-slate-200">{user ? (user.displayName || user.email) : 'Nenhuma (Modo Offline)'}</strong>
+            <strong className="text-slate-200">{user ? (user.displayName || user.email) : 'Modo Privado (Offline)'}</strong>
           </div>
           <div className="flex items-center justify-between">
-            <span>Status da Sincronização:</span>
+            <span>Status dos Dados:</span>
             <strong className={user ? 'text-emerald-400' : 'text-blue-400'}>
-              {user ? (isSyncing ? 'Sincronizando com Firestore...' : 'Nuvem Conectada (Tempo Real)') : 'Armazenamento Local Ativo'}
+              {user ? (isSyncing ? 'Sincronizando...' : 'Protegido & Sincronizado na Nuvem') : 'Armazenado com Segurança no Aparelho'}
             </strong>
           </div>
         </div>
