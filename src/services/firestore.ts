@@ -431,5 +431,22 @@ export const FirestoreService = {
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${userId}`);
     }
+  },
+
+  async clearUserData(userId: string) {
+    try {
+      const txSnap = await getDocs(collection(db, `users/${userId}/transactions`));
+      const goalSnap = await getDocs(collection(db, `users/${userId}/savingsGoals`));
+      const remSnap = await getDocs(collection(db, `users/${userId}/reminders`));
+
+      const batch = writeBatch(db);
+      txSnap.docs.forEach(d => batch.delete(d.ref));
+      goalSnap.docs.forEach(d => batch.delete(d.ref));
+      remSnap.docs.forEach(d => batch.delete(d.ref));
+
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${userId}`);
+    }
   }
 };

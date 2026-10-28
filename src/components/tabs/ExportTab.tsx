@@ -20,6 +20,7 @@ import {
 import { Transaction, Category, SavingsGoal } from '../../types/finance';
 import { ExportService, formatBRL } from '../../services/exportService';
 import { StorageService } from '../../services/storage';
+import { FirestoreService } from '../../services/firestore';
 import { PWAInstallButton } from '../PWAInstallButton';
 import { useFirebase } from '../../contexts/FirebaseContext';
 
@@ -144,9 +145,14 @@ export const ExportTab: React.FC<ExportTabProps> = React.memo(({
       message: 'ATENÇÃO: Deseja apagar TODOS os lançamentos e começar com a base totalmente zerada?',
       confirmLabel: 'Sim, Apagar Tudo',
       isDestructive: true,
-      onConfirm: () => {
+      onConfirm: async () => {
         StorageService.clearAllData();
         StorageService.saveTransactions([]);
+        StorageService.saveSavingsGoals([]);
+        StorageService.saveReminders([]);
+        if (user) {
+          await FirestoreService.clearUserData(user.uid);
+        }
         onRefreshData();
         showFeedback('success', 'Base de dados zerada com sucesso.');
         setConfirmAction(null);
