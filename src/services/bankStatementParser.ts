@@ -377,6 +377,8 @@ export function parseCSV(content: string, categories: Category[], existingTxs: T
       bankName = 'Bradesco';
     } else if (content.toLowerCase().includes('c6')) {
       bankName = 'C6 Bank';
+    } else if (content.toLowerCase().includes('santander')) {
+      bankName = 'Santander';
     }
 
     const transactions: ParsedBankTransaction[] = [];
@@ -386,19 +388,34 @@ export function parseCSV(content: string, categories: Category[], existingTxs: T
       const line = lines[i];
       if (!line) continue;
 
-      // Split line respecting quoted fields
-      const regex = new RegExp(`(?:^|${delimiter})(?:"([^"]*)"|([^${delimiter}]*))`, 'g');
+      // Safe CSV split respecting quotes without risky regex
       const cells: string[] = [];
-      let cellMatch;
-      while ((cellMatch = regex.exec(line)) !== null) {
-        cells.push((cellMatch[1] ?? cellMatch[2] ?? '').trim());
+      let currentCell = '';
+      let insideQuotes = '';
+      for (let c = 0; c < line.length; c++) {
+        const char = line[c];
+        if (char === '"' || char === "'") {
+          if (!insideQuotes) {
+            insideQuotes = char;
+          } else if (insideQuotes === char) {
+            insideQuotes = '';
+          } else {
+            currentCell += char;
+          }
+        } else if (char === delimiter && !insideQuotes) {
+          cells.push(currentCell.trim().replace(/^["']|["']$/g, ''));
+          currentCell = '';
+        } else {
+          currentCell += char;
+        }
       }
+      cells.push(currentCell.trim().replace(/^["']|["']$/g, ''));
 
       if (cells.length < 2) continue;
 
-      const rawDate = cells[dateIdx];
-      const rawAmt = cells[amountIdx];
-      const rawDesc = descIdx !== -1 && cells[descIdx] ? cells[descIdx] : 'Lançamento';
+      const rawDate = cells[dateIdx] || cells[0];
+      const rawAmt = cells[amountIdx] || cells[1];
+      const rawDesc = descIdx !== -1 && cells[descIdx] ? cells[descIdx] : (cells[2] || 'Lançamento');
       const rawCat = catIdx !== -1 && cells[catIdx] ? cells[catIdx] : null;
 
       if (!rawDate || !rawAmt) continue;
@@ -487,7 +504,21 @@ export function parseBankStatementFile(
   categories: Category[], 
   existingTxs: Transaction[]
 ): BankStatementParseResult {
-  const isOfx = filename.toLowerCase().endsWith('.ofx') || content.includes('<OFX>') || content.includes('<STMTTRN>');
+  const lowerName = filename.toLowerCase();
+  if (lowerName.endsWith('.pdf') || content.startsWith('%PDF')) {
+    return {
+      success: false,
+      bankName: 'PDF',
+      format: 'TEXT',
+      transactions: [],
+      totalIncome: 0,
+      totalExpense: 0,
+      duplicatesCount: 0,
+      error: 'Arquivos PDF em formato de documento visual não são importados diretamente. Para importar extratos do Santander, utilize arquivos em formato .OFX ou use a aba "Colar Texto do Extrato" copiando e colando as linhas do extrato.',
+    };
+  }
+
+  const isOfx = lowerName.endsWith('.ofx') || content.includes('<OFX>') || content.includes('<STMTTRN>');
   if (isOfx) {
     return parseOFX(content, categories, existingTxs);
   }
