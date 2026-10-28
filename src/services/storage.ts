@@ -221,12 +221,32 @@ export const StorageService = {
     localStorage.removeItem(STORAGE_KEYS.SAVINGS_GOALS);
     localStorage.removeItem(STORAGE_KEYS.REMINDERS);
     localStorage.removeItem(STORAGE_KEYS.INITIALIZED);
+    localStorage.removeItem('finanbolso_subscription_v1');
     localStorage.removeItem('finanbolso_transactions_v1');
     localStorage.removeItem('finanbolso_goals_v1');
     localStorage.removeItem('finanbolso_initialized_v1');
+
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('finanbolso_subscription_')) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch {}
+
     this.saveTransactions([]);
     this.saveSavingsGoals([]);
     this.saveReminders([]);
+    this.saveSubscription({
+      isPro: false,
+      planName: 'Gratuito',
+      durationDays: 0,
+      expiresAt: 0,
+      deviceId: this.getDeviceId()
+    });
   },
 
   // Unique Device Identifier (Hardware Fingerprint & Browser binding)
@@ -334,11 +354,12 @@ export const StorageService = {
     }
   },
 
-  getSubscription(): UserSubscription {
+  getSubscription(userId?: string): UserSubscription {
     try {
       const currentDeviceId = this.getDeviceId();
-      const data = localStorage.getItem('finanbolso_subscription_v1');
-      if (!data) return { isPro: false, planName: 'Gratuito', durationDays: 0, expiresAt: 0, deviceId: currentDeviceId };
+      const key = userId ? `finanbolso_subscription_${userId}` : 'finanbolso_subscription_v1';
+      const data = localStorage.getItem(key);
+      if (!data) return { isPro: false, planName: 'Gratuito', durationDays: 0, expiresAt: 0, deviceId: currentDeviceId, userId };
       const parsed: UserSubscription = JSON.parse(data);
       if (!parsed.deviceId) {
         parsed.deviceId = currentDeviceId;
@@ -350,21 +371,27 @@ export const StorageService = {
           isPro: false, 
           planName: 'Expirado', 
           expiresAt: parsed.expiresAt,
-          deviceId: currentDeviceId
+          deviceId: currentDeviceId,
+          userId
         };
-        this.saveSubscription(expired);
+        this.saveSubscription(expired, userId);
         return expired;
       }
       return parsed;
     } catch (e) {
-      return { isPro: false, planName: 'Gratuito', durationDays: 0, expiresAt: 0, deviceId: this.getDeviceId() };
+      return { isPro: false, planName: 'Gratuito', durationDays: 0, expiresAt: 0, deviceId: this.getDeviceId(), userId };
     }
   },
 
-  saveSubscription(sub: UserSubscription): void {
+  saveSubscription(sub: UserSubscription, userId?: string): void {
     try {
       if (!sub.deviceId) {
         sub.deviceId = this.getDeviceId();
+      }
+      const effectiveUserId = userId || sub.userId;
+      if (effectiveUserId) {
+        sub.userId = effectiveUserId;
+        localStorage.setItem(`finanbolso_subscription_${effectiveUserId}`, JSON.stringify(sub));
       }
       localStorage.setItem('finanbolso_subscription_v1', JSON.stringify(sub));
     } catch (e) {}

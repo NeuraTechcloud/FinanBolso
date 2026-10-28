@@ -160,19 +160,24 @@ function AppContent() {
       setCategories(DEFAULT_CATEGORIES);
       setSavingsGoals([]);
       setReminders([]);
-      setSubscription({
+      const freeSub: UserSubscription = {
         isPro: false,
         planName: 'Gratuito',
         durationDays: 0,
         expiresAt: 0,
         deviceId: StorageService.getDeviceId()
-      });
+      };
+      setSubscription(freeSub);
+      StorageService.saveSubscription(freeSub);
     } else {
       setTransactions(StorageService.getTransactions());
       const loadedCats = StorageService.getCategories();
       setCategories(loadedCats && loadedCats.length > 0 ? loadedCats : DEFAULT_CATEGORIES);
       setSavingsGoals(StorageService.getSavingsGoals());
       setReminders(StorageService.getReminders());
+      // Load user-specific subscription (defaulting to free if new user)
+      const userSub = StorageService.getSubscription(user.uid);
+      setSubscription(userSub);
     }
   }, [user, authLoading]);
 
@@ -184,19 +189,53 @@ function AppContent() {
     // Use a single cleanup for all listeners to ensure zero memory leaks
     const unsubs: Array<() => void> = [];
 
-    // Subscribe to User document to automatically sync Pro subscription by email
+    // Subscribe to User document to automatically sync Pro subscription by account
     unsubs.push(FirestoreService.subscribeUserDoc(user.uid, (userData) => {
+      // The master admin always has VIP Pro
+      if (user.email === 'bodygmr30@gmail.com') {
+        const adminSub: UserSubscription = {
+          isPro: true,
+          planName: 'Pro Anual (1460d VIP)',
+          durationDays: 1460,
+          expiresAt: Date.now() + 1460 * 24 * 60 * 60 * 1000,
+          deviceId: StorageService.getDeviceId(),
+          userId: user.uid
+        };
+        StorageService.saveSubscription(adminSub, user.uid);
+        setSubscription(adminSub);
+        return;
+      }
+
       if (userData && userData.subscription && userData.subscription.isPro) {
-        const cloudSub: UserSubscription = userData.subscription;
-        StorageService.saveSubscription(cloudSub);
-        setSubscription(cloudSub);
+        const cloudSub: UserSubscription = {
+          ...userData.subscription,
+          userId: user.uid
+        };
+        // Auto-expire check
+        if (cloudSub.expiresAt > 0 && cloudSub.expiresAt < Date.now()) {
+          const expiredSub: UserSubscription = {
+            ...cloudSub,
+            isPro: false,
+            planName: 'Expirado',
+            userId: user.uid
+          };
+          StorageService.saveSubscription(expiredSub, user.uid);
+          setSubscription(expiredSub);
+        } else {
+          StorageService.saveSubscription(cloudSub, user.uid);
+          setSubscription(cloudSub);
+        }
       } else {
         // Reset to local free sub when user document indicates no pro
-        const freeSub = StorageService.getSubscription();
-        freeSub.isPro = false;
-        freeSub.planName = 'Gratuito';
-        freeSub.expiresAt = 0;
-        StorageService.saveSubscription(freeSub);
+        const freeSub: UserSubscription = {
+          isPro: false,
+          planName: 'Gratuito',
+          durationDays: 0,
+          expiresAt: 0,
+          deviceId: StorageService.getDeviceId(),
+          userId: user.uid
+        };
+        StorageService.saveSubscription(freeSub, user.uid);
         setSubscription(freeSub);
       }
     }));

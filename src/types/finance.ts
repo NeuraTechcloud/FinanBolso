@@ -136,6 +136,7 @@ export interface UserSubscription {
   durationDays: number; // 30 or 365
   activationId?: string; // unique activation ID
   deviceId?: string; // unique device identifier
+  userId?: string; // unique user identifier
   activatedAt?: number;
   expiresAt: number;
 }

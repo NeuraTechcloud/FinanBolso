@@ -53,7 +53,27 @@ export const BankStatementImportModal: React.FC<BankStatementImportModalProps> =
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  const filteredTransactions = useMemo(() => {
+    if (!parseResult) return [];
+    return parseResult.transactions.filter(t => {
+      if (hideDuplicates && t.isDuplicate) return false;
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        return (
+          t.description.toLowerCase().includes(query) ||
+          t.category.toLowerCase().includes(query) ||
+          t.date.includes(query) ||
+          t.amount.toString().includes(query)
+        );
+      }
+      return true;
+    });
+  }, [parseResult, hideDuplicates, searchQuery]);
+
+  const selectedCount = useMemo(() => {
+    if (!parseResult) return 0;
+    return parseResult.transactions.filter(t => t.selected).length;
+  }, [parseResult]);
 
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -146,28 +166,6 @@ export const BankStatementImportModal: React.FC<BankStatementImportModalProps> =
     });
   };
 
-  const filteredTransactions = useMemo(() => {
-    if (!parseResult) return [];
-    return parseResult.transactions.filter(t => {
-      if (hideDuplicates && t.isDuplicate) return false;
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        return (
-          t.description.toLowerCase().includes(query) ||
-          t.category.toLowerCase().includes(query) ||
-          t.date.includes(query) ||
-          t.amount.toString().includes(query)
-        );
-      }
-      return true;
-    });
-  }, [parseResult, hideDuplicates, searchQuery]);
-
-  const selectedCount = useMemo(() => {
-    if (!parseResult) return 0;
-    return parseResult.transactions.filter(t => t.selected).length;
-  }, [parseResult]);
-
   const handleConfirmImport = () => {
     if (!parseResult) return;
     const selected = parseResult.transactions.filter(t => t.selected);
@@ -194,6 +192,8 @@ export const BankStatementImportModal: React.FC<BankStatementImportModalProps> =
     setErrorMessage(null);
     setSuccessMessage(null);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">

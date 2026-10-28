@@ -40,12 +40,6 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (user) {
         // Asynchronously update profile in background without blocking app render
         FirestoreService.saveUser(user).catch((e) => console.warn('User profile sync:', e));
-        
-        // Link active local subscription in background if pro
-        const localSub = StorageService.getSubscription();
-        if (localSub && localSub.isPro) {
-          FirestoreService.saveUserSubscription(user.uid, localSub).catch((e) => console.warn('Subscription sync:', e));
-        }
 
         // Only run initial migration ONCE per user account, never on every refresh
         const migrationKey = `bolsozen_migrated_${user.uid}`;
